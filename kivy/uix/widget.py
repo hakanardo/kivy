@@ -232,6 +232,18 @@ class WidgetException(Exception):
     pass
 
 
+def reindent(code, indent):
+    lines = code.split('\n')
+    lines = [l for l in lines if l.strip()]
+    i = 0
+    while lines[0][i] in ' \t':
+        i += 1
+    old_indent = lines[0][:i]
+    for l in lines:
+        assert l[:i] == old_indent
+    return '\n'.join(indent + l[i:] for l in lines)
+
+
 class WidgetMetaclass(type):
     '''Metaclass to automatically register new widgets for the
     :class:`~kivy.factory.Factory`
@@ -241,6 +253,10 @@ class WidgetMetaclass(type):
     '''
     def __init__(mcs, name, bases, attrs):
         super(WidgetMetaclass, mcs).__init__(name, bases, attrs)
+        if 'kv' in attrs:
+            kv = reindent(attrs['kv'], '    ')
+            del attrs['kv']
+            Builder.load_string('<%s>:\n%s' % (name, kv))
         Factory.register(name, cls=mcs)
 
 
