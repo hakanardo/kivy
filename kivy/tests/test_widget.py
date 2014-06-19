@@ -1,5 +1,5 @@
 import unittest
-
+from kivy.properties import NumericProperty
 
 class WidgetTestCase(unittest.TestCase):
 
@@ -64,3 +64,23 @@ class WidgetTestCase(unittest.TestCase):
         self.assertEqual(wid.collide_point(100, 100), True)
         self.assertEqual(wid.collide_point(200, 0), False)
         self.assertEqual(wid.collide_point(500, 500), False)
+
+    def test_kv(self):
+        class MyWidget(self.cls):
+            kv = '''
+                num: 42
+                pos: (10, 20)
+                Widget:
+                    pos: (30, 40)
+                Widget:
+                    pos: (30, 40)
+            '''
+            num = NumericProperty(7)
+
+        wid = MyWidget()
+        self.assertEqual(wid.pos, [10, 20])
+        self.assertEqual(wid.num, 42)
+        assert len(wid.children) == 2
+        for child in wid.children:
+            self.assertEqual(child.pos, [30, 40])
+
