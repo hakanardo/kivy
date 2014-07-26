@@ -469,7 +469,7 @@ cdef class Matrix:
                    m[12], m[13], m[14], m[15])
 
 
-    def xyhom(self):
+    cpdef Matrix xyhom(self):
         cdef double *m = <double *>self.mat
         nm = Matrix()
 

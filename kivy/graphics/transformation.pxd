@@ -38,3 +38,5 @@ cdef class Matrix:
             double vx, double vy, double vw, double vh)
     
     cpdef Matrix multiply_full(Matrix mb, Matrix ma)
+
+    cpdef Matrix xyhom(self)
