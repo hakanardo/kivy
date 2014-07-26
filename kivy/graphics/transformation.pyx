@@ -403,6 +403,39 @@ cdef class Matrix:
             r[15] = 1
         return mr
 
+    cpdef Matrix multiply_full(Matrix mb, Matrix ma):
+        '''Multiply the given matrix with self (from the left)
+        i.e. we premultiply the given matrix by the current matrix and return
+        the result (not inplace)::
+
+            m.multiply(n) -> n * m
+        '''
+        cdef Matrix mr = Matrix()
+        cdef double *a = <double *>ma.mat
+        cdef double *b = <double *>mb.mat
+        cdef double *r = <double *>mr.mat
+        with nogil:
+            r[ 0] = a[ 0] * b[0] + a[ 1] * b[4] + a[ 2] * b[ 8] + a[ 3] * b[12]
+            r[ 4] = a[ 4] * b[0] + a[ 5] * b[4] + a[ 6] * b[ 8] + a[ 7] * b[12]
+            r[ 8] = a[ 8] * b[0] + a[ 9] * b[4] + a[10] * b[ 8] + a[11] * b[12]
+            r[12] = a[12] * b[0] + a[13] * b[4] + a[14] * b[ 8] + a[15] * b[12]
+
+            r[ 1] = a[ 0] * b[1] + a[ 1] * b[5] + a[ 2] * b[ 9] + a[ 3] * b[13]
+            r[ 5] = a[ 4] * b[1] + a[ 5] * b[5] + a[ 6] * b[ 9] + a[ 7] * b[13]
+            r[ 9] = a[ 8] * b[1] + a[ 9] * b[5] + a[10] * b[ 9] + a[11] * b[13]
+            r[13] = a[12] * b[1] + a[13] * b[5] + a[14] * b[ 9] + a[15] * b[13]
+
+            r[ 2] = a[ 0] * b[2] + a[ 1] * b[6] + a[ 2] * b[10] + a[ 3] * b[14]
+            r[ 6] = a[ 4] * b[2] + a[ 5] * b[6] + a[ 6] * b[10] + a[ 7] * b[14]
+            r[10] = a[ 8] * b[2] + a[ 9] * b[6] + a[10] * b[10] + a[11] * b[14]
+            r[14] = a[12] * b[2] + a[13] * b[6] + a[14] * b[10] + a[15] * b[14]
+
+            r[ 3] = a[ 0] * b[2] + a[ 1] * b[7] + a[ 2] * b[11] + a[ 3] * b[15]
+            r[ 7] = a[ 4] * b[2] + a[ 5] * b[7] + a[ 6] * b[11] + a[ 7] * b[15]
+            r[11] = a[ 8] * b[2] + a[ 9] * b[7] + a[10] * b[11] + a[11] * b[15]
+            r[15] = a[12] * b[2] + a[13] * b[7] + a[14] * b[11] + a[15] * b[15]
+        return mr
+
     cpdef project(Matrix self, double objx, double objy, double objz, Matrix model, Matrix proj,
             double vx, double vy, double vw, double vh):
         '''Project a point from 3d space into a 2d viewport.
@@ -436,5 +469,27 @@ cdef class Matrix:
                    m[12], m[13], m[14], m[15])
 
 
+    def xyhom(self):
+        cdef double *m = <double *>self.mat
+        nm = Matrix()
 
+        nm.mat[0] = m[0]
+        nm.mat[1] = m[1]
+        nm.mat[2] = m[3]
 
+        nm.mat[4] = m[4]
+        nm.mat[5] = m[5]
+        nm.mat[6] = m[7]
+        
+        nm.mat[8] = m[12]
+        nm.mat[9] = m[13]
+        nm.mat[10] = m[15]
+
+        nm.mat[3] = 0
+        nm.mat[7] = 0
+        nm.mat[11] = 0
+        nm.mat[12] = 0
+        nm.mat[13] = 0
+        nm.mat[14] = 0
+        nm.mat[15] = 1
+        return nm

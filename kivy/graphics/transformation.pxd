@@ -33,6 +33,8 @@ cdef class Matrix:
 
     cpdef tuple transform_point(Matrix self, double x, double y, double z,
             t=?)
-
+    
     cpdef project(Matrix self, double objx, double objy, double objz, Matrix model, Matrix proj,
             double vx, double vy, double vw, double vh)
+    
+    cpdef Matrix multiply_full(Matrix mb, Matrix ma)
