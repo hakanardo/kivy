@@ -180,12 +180,13 @@ class MouseMotionEventProvider(MotionEventProvider):
         elif self.alt_touch is not None and 'alt' not in modifiers:
             # alt just released ?
             is_double_tap = 'shift' in modifiers
-            cur = self.create_touch(rx, ry, is_double_tap, True)
+            cur = self.create_touch(rx, ry, is_double_tap, True, self.last_button_pressed)
         return True
 
     def on_mouse_press(self, win, x, y, button, modifiers):
         if self.test_activity():
             return
+        self.last_button_pressed = button
         width, height = EventLoop.window.system_size
         rx = x / float(width)
         ry = 1. - y / float(height)
