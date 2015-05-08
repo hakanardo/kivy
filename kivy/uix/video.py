@@ -50,7 +50,7 @@ class Video(Image):
         video.state = 'play'
 
     :attr:`state` is an :class:`~kivy.properties.OptionProperty` and defaults
-    to 'play'.
+    to 'stop'.
     '''
 
     play = BooleanProperty(False)
@@ -129,9 +129,11 @@ class Video(Image):
 
     def __init__(self, **kwargs):
         self._video = None
-        super(Image, self).__init__(**kwargs)
+        super(Video, self).__init__(**kwargs)
         self.bind(source=self._trigger_video_load)
 
+        if "eos" in kwargs:
+            self.options["eos"] = kwargs["eos"]
         if self.source:
             self._trigger_video_load()
 
@@ -198,9 +200,12 @@ class Video(Image):
             self._video.eos = False
 
     def _on_video_frame(self, *largs):
-        self.duration = self._video.duration
-        self.position = self._video.position
-        self.texture = self._video.texture
+        video = self._video
+        if not video:
+            return
+        self.duration = video.duration
+        self.position = video.position
+        self.texture = video.texture
         self.canvas.ask_update()
 
     def _on_eos(self, *largs):

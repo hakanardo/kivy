@@ -3,7 +3,7 @@ Application
 ===========
 
 The :class:`App` class is the base for creating Kivy applications.
-Think of it as your main entry point into the Kivy run loop.  In most
+Think of it as your main entry point into the Kivy run loop. In most
 cases, you subclass this class and make your own app. You create an
 instance of your specific app class and then, when you are ready to
 start the application's life cycle, you call your instance's
@@ -264,13 +264,8 @@ Pause mode
 
 .. versionadded:: 1.1.0
 
-.. warning::
-
-    This mode is experimental, and designed for phones/tablets. There are some
-    cases where your application could crash on resume.
-
 On tablets and phones, the user can switch at any moment to another
-application.  By default, your application will close and the
+application. By default, your application will close and the
 :meth:`App.on_stop` event will be fired.
 
 If you support Pause mode, when switching to another application, your
@@ -367,7 +362,6 @@ class App(EventDispatcher):
     .. versionadded:: 1.0.5
 
     .. versionchanged:: 1.8.0
-
         `title` is now a :class:`~kivy.properties.StringProperty`. Don't set the
         title in the class as previously stated in the documentation.
 
@@ -397,7 +391,6 @@ class App(EventDispatcher):
     .. versionadded:: 1.0.5
 
     .. versionchanged:: 1.8.0
-
         `icon` is now a :class:`~kivy.properties.StringProperty`. Don't set the
         icon in the class as previously stated in the documentation.
 
@@ -408,6 +401,10 @@ class App(EventDispatcher):
             class MyApp(App):
                 icon = 'customicon.png'
 
+         Recommended 256x256 or 1024x1024? for GNU/Linux and Mac OSX
+         32x32 for Windows7 or less. <= 256x256 for windows 8
+         256x256 does work (on Windows 8 at least), but is scaled
+         down and doesn't look as good as a 32x32 icon.
     '''
 
     use_kivy_settings = True
@@ -421,7 +418,7 @@ class App(EventDispatcher):
     settings_cls = ObjectProperty(None)
     '''.. versionadded:: 1.8.0
 
-    The class to used to construct the settings panel and
+    The class used to construct the settings panel and
     the instance passed to :meth:`build_config`. You should
     use either :class:`~kivy.uix.settings.Settings` or one of the provided
     subclasses with different layouts
@@ -476,23 +473,23 @@ class App(EventDispatcher):
         #: Options passed to the __init__ of the App
         self.options = kwargs
 
-        #: Instance to the :class:`~kivy.config.ConfigParser` of the
-        #: application
-        #: configuration. Can be used to query some config token in the
-        #: build()
+        #: Returns an instance of the :class:`~kivy.config.ConfigParser` for
+        #: the application configuration. You can use this to query some config
+        #: tokens in the :meth:`build` method.
         self.config = None
 
-        #: Root widget set by the :meth:`build` method or by the
+        #: The *root* widget returned by the :meth:`build` method or by the
         #: :meth:`load_kv` method if the kv file contains a root widget.
         self.root = None
 
     def build(self):
-        '''Initializes the application; will be called only once.
+        '''Initializes the application; it will be called only once.
         If this method returns a widget (tree), it will be used as the root
         widget and added to the window.
 
-        :return: None or a root :class:`~kivy.uix.widget.Widget` instance
-                 if no self.root exists.'''
+        :return:
+            None or a root :class:`~kivy.uix.widget.Widget` instance
+            if no self.root exists.'''
 
         if not self.root:
             return Widget()
@@ -507,8 +504,9 @@ class App(EventDispatcher):
         automatically saved in the file returned by
         :meth:`get_application_config`.
 
-        :param config: Use this to add defaults section / key / value items
-        :type config: :class:`~kivy.config.ConfigParser`
+        :Parameters:
+            `config`: :class:`~kivy.config.ConfigParser`
+                Use this to add default section / key / value items
 
         '''
 
@@ -516,15 +514,18 @@ class App(EventDispatcher):
         '''.. versionadded:: 1.0.7
 
         This method is called when the user (or you) want to show the
-        application settings. This will be called only once when the user
-        first requests the application to display the settings.
+        application settings. It is called once when the settings panel
+        is first opened, after which the panel is cached. It may be
+        called again if the cached settings panel is removed by
+        :meth:`destroy_settings`.
 
         You can use this method to add settings panels and to
         customise the settings widget e.g. by changing the sidebar
         width. See the module documentation for full details.
 
-        :param settings: Settings instance for adding panels
-        :type settings: :class:`~kivy.uix.settings.Settings`
+        :Parameters:
+            `settings`: :class:`~kivy.uix.settings.Settings`
+                Settings instance for adding panels
 
         '''
 
@@ -556,6 +557,14 @@ class App(EventDispatcher):
         documentation for more information on how to create kv files. If your
         kv file contains a root widget, it will be used as self.root, the root
         widget for the application.
+
+        .. note::
+
+            This function is called from :meth:`run`, therefore, any widget
+            whose styling is defined in this kv file and is created before
+            :meth:`run` is called (e.g. in `__init__`), won't have its styling
+            applied. Note that :meth:`build` is called after :attr:`load_kv`
+            has been called.
         '''
         # Detect filename automatically if it was not specified.
         if filename:
@@ -649,6 +658,14 @@ class App(EventDispatcher):
         return expanduser(defaultpath) % {
             'appname': self.name, 'appdir': self.directory}
 
+    @property
+    def root_window(self):
+        '''.. versionadded:: 1.9.0
+
+        Returns the root window instance used by :meth:`run`.
+        '''
+        return self._app_window
+
     def load_config(self):
         '''(internal) This function is used for returning a ConfigParser with
         the application configuration. It's doing 3 things:
@@ -659,9 +676,16 @@ class App(EventDispatcher):
             #. If it exists, it loads the application configuration file,
                otherwise it creates one.
 
-        :return: ConfigParser instance
+        :return:
+            :class:`~kivy.config.ConfigParser` instance
         '''
-        self.config = config = ConfigParser()
+        try:
+            config = ConfigParser.get_configparser('app')
+        except KeyError:
+            config = None
+        if config is None:
+            config = ConfigParser(name='app')
+        self.config = config
         self.build_config(config)
         # if no sections are created, that's mean the user don't have
         # configuration.
@@ -678,7 +702,14 @@ class App(EventDispatcher):
                 config.read(filename)
             except:
                 Logger.error('App: Corrupted config file, ignored.')
-                self.config = config = ConfigParser()
+                config.name = ''
+                try:
+                    config = ConfigParser.get_configparser('app')
+                except KeyError:
+                    config = None
+                if config is None:
+                    config = ConfigParser(name='app')
+                self.config = config
                 self.build_config(config)
                 pass
         else:
@@ -714,10 +745,11 @@ class App(EventDispatcher):
 
         Different platforms have different conventions with regards to where
         the user can store data such as preferences, saved games and settings.
-        This function implements these conventions.
+        This function implements these conventions. The <app_name> directory
+        is created when the property is called, unless it already exists.
 
         On iOS, `~/Documents<app_name>` is returned (which is inside the
-        apps sandbox).
+        app's sandbox).
 
         On Android, `/sdcard/<app_name>` is returned.
 
@@ -864,13 +896,16 @@ class App(EventDispatcher):
 
     def open_settings(self, *largs):
         '''Open the application settings panel. It will be created the very
-        first time. The settings panel will be displayed with the
+        first time, or recreated if the previously cached panel has been
+        removed by :meth:`destroy_settings`. The settings panel will be
+        displayed with the
         :meth:`display_settings` method, which by default adds the
         settings panel to the Window attached to your application. You
         should override that method if you want to display the
         settings panel differently.
 
-        :return: True if the settings has been opened.
+        :return:
+            True if the settings has been opened.
 
         '''
         if self._app_settings is None:
@@ -889,9 +924,10 @@ class App(EventDispatcher):
 
         You should return True if the display is successful, otherwise False.
 
-        :param settings: A :class:`~kivy.uix.settings.Settings`
-                         instance. You should define how to display it.
-        :type config: :class:`~kivy.uix.settings.Settings`
+        :Parameters:
+            `settings`: :class:`~kivy.uix.settings.Settings`
+                You can modify this object in order to modify the settings
+                display.
 
         '''
         win = self._app_window
@@ -906,7 +942,8 @@ class App(EventDispatcher):
     def close_settings(self, *largs):
         '''Close the previously opened settings panel.
 
-        :return: True if the settings has been closed.
+        :return:
+            True if the settings has been closed.
         '''
         win = self._app_window
         settings = self._app_settings
@@ -918,8 +955,11 @@ class App(EventDispatcher):
         return False
 
     def create_settings(self):
-        '''Create the settings panel. This method is called only one time per
-        application life-time and the result is cached internally.
+        '''Create the settings panel. This method will normally
+        be called only one time per
+        application life-time and the result is cached internally,
+        but it may be called again if the cached panel is removed
+        by :meth:`destroy_settings`.
 
         By default, it will build a settings panel according to
         :attr:`settings_cls`, call :meth:`build_settings`, add a Kivy panel if

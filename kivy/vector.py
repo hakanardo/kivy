@@ -2,9 +2,9 @@
 ======
 
 The :class:`Vector` represents a 2D vector (x, y).
-Our implementation is made on top of a Python list.
+Our implementation is built on top of a Python list.
 
-Example for constructing a Vector::
+ An example of constructing a Vector::
 
     >>> # Construct a point at 82,34
     >>> v = Vector(82, 34)
@@ -52,7 +52,7 @@ points::
 Vector operators
 ----------------
 
-The :class:`Vector` supports some numeric operators like +, -, /::
+The :class:`Vector` supports some numeric operators such as +, -, /::
 
     >>> Vector(1, 1) + Vector(9, 5)
     [10, 6]
@@ -67,7 +67,7 @@ The :class:`Vector` supports some numeric operators like +, -, /::
     [2.0, 2.0]
 
 
-You can also do in-place operations::
+You can also use in-place operators::
 
     >>> v = Vector(1, 1)
     >>> v += 2
@@ -194,6 +194,12 @@ class Vector(list):
             return Vector(list(map(lambda x, y: x / y, self, val)))
         except Exception:
             return Vector([x / val for x in self])
+
+    def __rtruediv__(self, val):
+        try:
+            return Vector(*val) / self
+        except Exception:
+            return Vector(val, val) / self
 
     def __rdiv__(self, val):
         try:
@@ -377,7 +383,7 @@ class Vector(list):
         py = (u * (y3 - y4) - (y1 - y2) * v) / denom
         #Here are the new bits
         c1 = (x1 <= px <= x2) or (x2 <= px <= x1)
-        c2 = (y1 <= py <= y2) or (y2 <= py <= y2)
+        c2 = (y1 <= py <= y2) or (y2 <= py <= y1)
         c3 = (x3 <= px <= x4) or (x4 <= px <= x3)
         c4 = (y3 <= py <= y4) or (y4 <= py <= y3)
 

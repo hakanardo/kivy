@@ -17,8 +17,7 @@ You should not use the Sound class directly. The class returned by
 type, so it might return different Sound classes depending the file type.
 
 .. versionchanged:: 1.8.0
-
-    There is now 2 distinct Gstreamer implementation: one using Gi/Gst working
+    There are now 2 distinct Gstreamer implementations: one using Gi/Gst working
     for both Python 2+3 with Gstreamer 1.0, and one using PyGST working
     only for Python 2 + Gstreamer 0.10.
     If you have issue with GStreamer, have a look at
@@ -26,7 +25,9 @@ type, so it might return different Sound classes depending the file type.
 
 .. note::
 
-    Recording audio is not supported.
+    The core audio library does not support recording audio. If you require
+    this functionality, please refer to the
+    `audiostream <https://github.com/kivy/audiostream>`_ extension.
 
 '''
 
@@ -39,6 +40,7 @@ from kivy.compat import PY2
 from kivy.resources import resource_find
 from kivy.properties import StringProperty, NumericProperty, OptionProperty, \
     AliasProperty, BooleanProperty
+from kivy.setupconfig import USE_SDL2
 
 
 class SoundLoader:
@@ -60,6 +62,8 @@ class SoundLoader:
         if rfn is not None:
             filename = rfn
         ext = filename.split('.')[-1].lower()
+        if '?' in ext:
+            ext = ext.split('?')[0]
         for classobj in SoundLoader._classes:
             if ext in classobj.extensions():
                 return classobj(source=filename)
@@ -198,7 +202,10 @@ except ImportError:
     #audio_libs += [('gi', 'audio_gi')]
     if PY2:
         audio_libs += [('pygst', 'audio_pygst')]
-audio_libs += [('sdl', 'audio_sdl')]
-audio_libs += [('pygame', 'audio_pygame')]
+audio_libs += [('ffpyplayer', 'audio_ffpyplayer')]
+if USE_SDL2:
+    audio_libs += [('sdl2', 'audio_sdl2')]
+else:
+    audio_libs += [('pygame', 'audio_pygame')]
 
 core_register_libs('audio', audio_libs)

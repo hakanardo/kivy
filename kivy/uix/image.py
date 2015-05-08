@@ -14,28 +14,37 @@ the :class:`AsyncImage` subclass::
 
     aimg = AsyncImage(source='http://mywebsite.com/logo.png')
 
+This can be useful as it prevents your application from waiting until the image
+is loaded. If you want to display large images or retrieve them from URL's,
+using :class:`AsyncImage` will allow these resources to be retrieved on a
+background thread without blocking your application.
+
 Alignment
 ---------
 
 By default, the image is centered and fits inside the widget bounding box.
-If you don't want that, you can inherit from Image and create your own style.
+If you don't want that, you can set `allow_stretch` to True and `keep_ratio`
+to False.
 
-For example, if you want your image to be the same size as your widget, you
-could do::
+You can also inherit from Image and create your own style.
+
+
+For example, if you want your image to be greater than,the size of your widget,
+you could do::
 
     class FullImage(Image):
         pass
 
 And in your kivy language file::
 
-    <FullImage>:
+    <-FullImage>:
         canvas:
             Color:
                 rgb: (1, 1, 1)
             Rectangle:
                 texture: self.texture
-                size: self.size
-                pos: self.pos
+                size: self.width + 20, self.height + 20
+                pos: self.x - 10, self.y - 10
 
 '''
 
@@ -46,8 +55,10 @@ from kivy.core.image import Image as CoreImage
 from kivy.resources import resource_find
 from kivy.properties import StringProperty, ObjectProperty, ListProperty, \
     AliasProperty, BooleanProperty, NumericProperty
-from kivy.loader import Loader
 from kivy.logger import Logger
+
+# delayed imports
+Loader = None
 
 
 class Image(Widget):
@@ -159,6 +170,15 @@ class Image(Widget):
     defaults to 0.25 (4 FPS).
     '''
 
+    anim_loop = NumericProperty(0)
+    '''Number of loops to play then stop animating. 0 means keep animating.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`anim_loop` is a :class:`~kivy.properties.NumericProperty` defaults
+    to 0.
+    '''
+
     nocache = BooleanProperty(False)
     '''If this property is set True, the image will not be added to the
     internal cache. The cache will simply ignore any calls trying to
@@ -210,6 +230,7 @@ class Image(Widget):
 
     def __init__(self, **kwargs):
         self._coreimage = None
+        self._loops = 0
         super(Image, self).__init__(**kwargs)
         self.bind(source=self.texture_update,
                   mipmap=self.texture_update)
@@ -221,6 +242,7 @@ class Image(Widget):
             self.texture = None
         else:
             filename = resource_find(self.source)
+            self._loops = 0
             if filename is None:
                 return Logger.error('Image: Error reading file {filename}'.
                                     format(filename=self.source))
@@ -240,6 +262,7 @@ class Image(Widget):
                 self.texture = ci.texture
 
     def on_anim_delay(self, instance, value):
+        self._loop = 0
         if self._coreimage is None:
             return
         self._coreimage.anim_delay = value
@@ -253,6 +276,12 @@ class Image(Widget):
     def _on_tex_change(self, *largs):
         # update texture from core image
         self.texture = self._coreimage.texture
+        ci = self._coreimage
+        if self.anim_loop and ci._anim_index == len(ci._image.textures) - 1:
+            self._loops += 1
+            if self.anim_loop == self._loops:
+                ci.anim_reset(False)
+                self._loops = 0
 
     def reload(self):
         '''Reload image from disk. This facilitates re-loading of
@@ -294,6 +323,9 @@ class AsyncImage(Image):
     def __init__(self, **kwargs):
         self._coreimage = None
         super(AsyncImage, self).__init__(**kwargs)
+        global Loader
+        if not Loader:
+            from kivy.loader import Loader
         self.bind(source=self._load_source)
         if self.source:
             self._load_source()
@@ -309,8 +341,8 @@ class AsyncImage(Image):
             if not self.is_uri(source):
                 source = resource_find(source)
             self._coreimage = image = Loader.image(source,
-                                                   nocache=self.nocache,
-                                                   mipmap=self.mipmap)
+                nocache=self.nocache, mipmap=self.mipmap,
+                anim_delay=self.anim_delay)
             image.bind(on_load=self._on_source_load)
             image.bind(on_texture=self._on_tex_change)
             self.texture = image.texture

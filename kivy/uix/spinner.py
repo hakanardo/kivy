@@ -7,10 +7,10 @@ Spinner
 .. image:: images/spinner.jpg
     :align: right
 
-Spinner is a widget that provide a quick way to select one value from a set. In
-the default state, a spinner show its currently selected value. Touching the
-spinner displays a dropdown menu with all other available values from which the
-user can select a new one.
+Spinner is a widget that provides a quick way to select one value from a set.
+In the default state, a spinner shows its currently selected value.
+Touching the spinner displays a dropdown menu with all the other available
+values from which the user can select a new one.
 
 Example::
 
@@ -18,7 +18,7 @@ Example::
     from kivy.uix.spinner import Spinner
 
     spinner = Spinner(
-        # default value showed
+        # default value shown
         text='Home',
         # available values
         values=('Home', 'Work', 'Other', 'Custom'),
@@ -77,7 +77,6 @@ class Spinner(Button):
     defaults to :class:`SpinnerOption`.
 
     .. versionchanged:: 1.8.0
-
         If you set a string, the :class:`~kivy.factory.Factory` will be used to
         resolve the class.
 
@@ -90,7 +89,6 @@ class Spinner(Button):
     defaults to :class:`~kivy.uix.dropdown.DropDown`.
 
     .. versionchanged:: 1.8.0
-
         If you set a string, the :class:`~kivy.factory.Factory` will be used to
         resolve the class.
 
@@ -118,7 +116,7 @@ class Spinner(Button):
     def _build_dropdown(self, *largs):
         if self._dropdown:
             self._dropdown.unbind(on_select=self._on_dropdown_select)
-            self._dropdown.unbind(on_dismiss=self._toggle_dropdown)
+            self._dropdown.unbind(on_dismiss=self._close_dropdown)
             self._dropdown.dismiss()
             self._dropdown = None
         cls = self.dropdown_cls
@@ -126,7 +124,7 @@ class Spinner(Button):
             cls = Factory.get(cls)
         self._dropdown = cls()
         self._dropdown.bind(on_select=self._on_dropdown_select)
-        self._dropdown.bind(on_dismiss=self._toggle_dropdown)
+        self._dropdown.bind(on_dismiss=self._close_dropdown)
         self._update_dropdown()
 
     def _update_dropdown(self, *largs):
@@ -142,6 +140,9 @@ class Spinner(Button):
 
     def _toggle_dropdown(self, *largs):
         self.is_open = not self.is_open
+
+    def _close_dropdown(self, *largs):
+        self.is_open = False
 
     def _on_dropdown_select(self, instance, data, *largs):
         self.text = data

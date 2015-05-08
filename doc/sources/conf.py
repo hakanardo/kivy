@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath('sphinxext'))
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     'autodoc', 'sphinx.ext.todo', 'preprocess', 'sphinx.ext.ifconfig',
-    'sphinx.ext.viewcode']
+    'sphinx.ext.viewcode', 'sphinx.ext.mathjax']
 
 # Todo configuration
 todo_include_todos = True
@@ -102,7 +102,7 @@ html_style = 'fresh.css'
 
 # The name of an image file (within the static path) to place at the top of
 # the sidebar.
-html_logo = 'logo-kivy.png'
+html_logo = '.static/logo-kivy.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -194,3 +194,27 @@ latex_use_parts = True
 
 # If false, no module index is generated.
 #latex_use_modindex = True
+
+from kivy import setupconfig
+
+replacements = {
+    'cython_install': 'Cython==' + setupconfig.CYTHON_MAX,
+    'cython_note': (
+        'This version of **Kivy requires at least Cython version {0}**, '
+        'and has been tested through {1}. Later versions may work, '
+        'but as they have not been tested there is no guarantee.'
+    ).format(setupconfig.CYTHON_MIN, setupconfig.CYTHON_MAX)
+}
+
+if setupconfig.CYTHON_BAD:
+    replacements['cython_note'] += (' **The following versions of Cython have '
+                                    'known issues and cannot be used with Kivy'
+                                    ': {0}**').format(setupconfig.CYTHON_BAD)
+
+epilog = []
+
+for key, value in replacements.items():
+    rep = '.. |{0}| replace:: {1}'.format(key, value)
+    epilog.append(rep)
+
+rst_epilog = '\n'.join(epilog)

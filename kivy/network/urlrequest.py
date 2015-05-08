@@ -15,25 +15,28 @@ application/json and the result automatically passed through json.loads.
 The syntax to create a request::
 
     from kivy.network.urlrequest import UrlRequest
-    req = UrlRequest(url, on_success, on_error, req_body, req_headers)
+    req = UrlRequest(url, on_success, on_redirect, on_failure, on_error,
+                     on_progress, req_body, req_headers, chunk_size,
+                     timeout, method, decode, debug, file_path)
 
 
 Only the first argument is mandatory: the rest are optional.
 By default, a "GET" request will be sent. If the :attr:`UrlRequest.req_body` is
 not None, a "POST" request will be sent. It's up to you to adjust
-:attr:`UrlRequest.req_headers` to suite your requirements.
+:attr:`UrlRequest.req_headers` to suit your requirements and the response
+to the request will be accessible as the parameter called "result" on
+the callback function of the on_success event.
 
 
-Example of fetching twitter trends::
+Example of fetching weather in Paris::
 
-    def got_twitter_trends(req, result):
-        trends = result[0]['trends']
-        print('Last %d twitter trends:' % len(trends))
-        for trend in trends:
-            print(' - ', trend['name'])
+    def got_weather(req, results):
+        for key, value in results['weather'][0].items():
+            print(key, ': ', value)
 
-    req = UrlRequest('https://api.twitter.com/1/trends/1.json',
-            got_twitter_trends)
+    req = UrlRequest(
+        'http://api.openweathermap.org/data/2.5/weather?q=Paris,fr',
+        got_weather)
 
 Example of Posting data (adapted from httplib example)::
 
@@ -137,11 +140,13 @@ class UrlRequest(Thread):
             If set, the result of the UrlRequest will be written to this path
             instead of in memory.
 
-    .. versionadded:: 1.8.0
+    .. versionchanged:: 1.8.0
+
         Parameter `decode` added.
         Parameter `file_path` added.
         Parameter `on_redirect` added.
         Parameter `on_failure` added.
+
     '''
 
     def __init__(self, url, on_success=None, on_redirect=None,
@@ -310,6 +315,12 @@ class UrlRequest(Thread):
                 trigger()
         else:
             result = resp.read()
+            try:
+                if isinstance(result, bytes):
+                    result = result.decode('utf-8')
+            except UnicodeDecodeError:
+                # if it's an image? decoding would not work
+                pass
         req.close()
 
         # return everything
@@ -491,8 +502,9 @@ if __name__ == '__main__':
         pprint('Got an error:')
         pprint(error)
 
-    req = UrlRequest('http://api.twitter.com/1/trends.json',
-                     on_success, on_error)
+    req = UrlRequest('http://en.wikipedia.org/w/api.php?format'
+        '=json&action=query&titles=Kivy&prop=revisions&rvprop=content',
+        on_success, on_error)
     while not req.is_finished:
         sleep(1)
         Clock.tick()

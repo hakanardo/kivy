@@ -36,9 +36,9 @@ Single file glsl shader programs
 
 .. versionadded:: 1.6.0
 
-To simplify shader management, the vertex and fragment shaders can be loaded 
-automatically from a single glsl source file (plain text). The file should 
-contain sections identified by a line starting with '---vertex' and 
+To simplify shader management, the vertex and fragment shaders can be loaded
+automatically from a single glsl source file (plain text). The file should
+contain sections identified by a line starting with '---vertex' and
 '---fragment' respectively (case insensitive), e.g.::
 
     // anything before a meaningful section such as this comment are ignored
@@ -141,10 +141,20 @@ cdef class ShaderSource:
     cdef get_shader_log(self, int shader):
         '''Return the shader log.
         '''
-        cdef char msg[2048]
-        msg[0] = '\0'
-        glGetShaderInfoLog(shader, 2048, NULL, msg)
-        return msg
+        cdef char *msg
+        cdef bytes py_msg
+        cdef int info_length
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &info_length)
+        if info_length <= 0:
+            return ""
+        msg = <char *>malloc(info_length * sizeof(char))
+        if msg == NULL:
+            return ""
+        msg[0] = "\0"
+        glGetShaderInfoLog(shader, info_length, NULL, msg)
+        py_msg = msg
+        free(msg)
+        return py_msg
 
 
 cdef class Shader:
@@ -158,14 +168,13 @@ cdef class Shader:
     '''
     def __cinit__(self):
         self._success = 0
-        self.program = -1
+        self.program = 0
         self.vertex_shader = None
         self.fragment_shader = None
         self.uniform_locations = dict()
         self.uniform_values = dict()
 
     def __init__(self, str vs=None, str fs=None, str source=None):
-        get_context().register_shader(self)
         self.program = glCreateProgram()
         if source:
             self.source = source
@@ -421,6 +430,7 @@ cdef class Shader:
     cdef void bind_vertex_format(self, VertexFormat vertex_format):
         cdef unsigned int i
         cdef vertex_attr_t *attr
+        cdef bytes name
 
         # if the current vertex format used in the shader is the current one, do
         # nothing.
@@ -445,7 +455,8 @@ cdef class Shader:
                 attr = &vertex_format.vattr[i]
                 if attr.per_vertex == 0:
                     continue
-                attr.index = glGetAttribLocation(self.program, <char *><bytes>attr.name)
+                name = <bytes>attr.name
+                attr.index = glGetAttribLocation(self.program, <char *>name)
                 glEnableVertexAttribArray(attr.index)
 
         # save for the next run.
@@ -528,7 +539,15 @@ cdef class Shader:
         cdef GLsizei length
         msg[0] = '\0'
         glGetProgramInfoLog(shader, 2048, &length, msg)
-        return msg[:length]
+        # XXX don't use the msg[:length] as a string directly, or the unicode
+        # will fail on shitty driver. Ie, some Intel drivers return a static
+        # unitialized string of length 40, with just a content of "Success.\n\0"
+        # Trying to decode data after \0 will just fail. So use bytes, and
+        # convert only the part before \0.
+        # XXX Also, we cannot use directly msg as a python string, as some
+        # others drivers doesn't include a \0 (which is great.)
+        cdef bytes ret = msg[:length]
+        return ret.split(b'\0')[0].decode('utf-8')
 
     cdef void process_message(self, str ctype, message):
         message = message.strip()

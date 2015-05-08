@@ -30,13 +30,13 @@ An example usage::
 
 __all__ = ('CheckBox', )
 
-from weakref import ref
 from kivy.uix.widget import Widget
-from kivy.properties import BooleanProperty, ObjectProperty
+from kivy.properties import BooleanProperty, StringProperty
+from kivy.uix.behaviors import ToggleButtonBehavior
 
 
-class CheckBox(Widget):
-    '''CheckXox class, see module documentation for more information.
+class CheckBox(ToggleButtonBehavior, Widget):
+    '''CheckBox class, see module documentation for more information.
     '''
 
     active = BooleanProperty(False)
@@ -46,71 +46,110 @@ class CheckBox(Widget):
     to False.
     '''
 
-    __groups = {}
+    background_checkbox_normal = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_off')
+    '''Background image of the checkbox used for the default graphical
+    representation when the checkbox is not active.
 
-    group = ObjectProperty(None, allownone=True)
-    '''Group of the checkbox. If None, no group will be used (the checkbox is
-    independent). If specified, the :attr:`group` must be a hashable object
-    such as a string. Only one checkbox in a group can be active.
+    .. versionadded:: 1.9.0
 
-    :attr:`group` is an :class:`~kivy.properties.ObjectProperty` and
-    defaults to None.
+    :attr:`background_checkbox_normal` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_off'.
     '''
 
-    def __init__(self, **kwargs):
-        self._previous_group = None
-        super(CheckBox, self).__init__(**kwargs)
+    background_checkbox_down = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_on')
+    '''Background image of the checkbox used for the default graphical
+    representation when the checkbox is active.
 
-    def on_group(self, *largs):
-        groups = CheckBox.__groups
-        if self._previous_group:
-            group = groups[self._previous_group]
-            for item in group[:]:
-                if item() is self:
-                    group.remove(item)
-                    break
-        group = self._previous_group = self.group
-        if group not in groups:
-            groups[group] = []
-        r = ref(self, CheckBox._clear_groups)
-        groups[group].append(r)
+    .. versionadded:: 1.9.0
 
-    def _release_group(self, current):
-        if self.group is None:
-            return
-        group = self.__groups[self.group]
-        for item in group[:]:
-            widget = item()
-            if widget is None:
-                group.remove(item)
-            if widget is current:
-                continue
-            widget.active = False
+    :attr:`background_checkbox_down` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_on'.
+    '''
+
+    background_checkbox_disabled_normal = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_disabled_off')
+    '''Background image of the checkbox used for the default graphical
+    representation when the checkbox is disabled and not active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_checkbox_disabled_normal` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_disabled_off'.
+    '''
+
+    background_checkbox_disabled_down = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_disabled_on')
+    '''Background image of the checkbox used for the default graphical
+    representation when the checkbox is disabled and active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_checkbox_disabled_down` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_disabled_on'.
+    '''
+
+    background_radio_normal = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_radio_off')
+    '''Background image of the radio button used for the default graphical
+    representation when the radio button is not active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_radio_normal` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_radio_off'.
+    '''
+
+    background_radio_down = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_radio_on')
+    '''Background image of the radio button used for the default graphical
+    representation when the radio button is active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_radio_down` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_radio_on'.
+    '''
+
+    background_radio_disabled_normal = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_radio_disabled_off')
+    '''Background image of the radio button used for the default graphical
+    representation when the radio button is disabled and not active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_radio_disabled_normal` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_radio_disabled_off'.
+    '''
+
+    background_radio_disabled_down = StringProperty(
+        'atlas://data/images/defaulttheme/checkbox_radio_disabled_on')
+    '''Background image of the radio button used for the default graphical
+    representation when the radio button is disabled and active.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`background_radio_disabled_down` is a
+    :class:`~kivy.properties.StringProperty` and defaults to
+    'atlas://data/images/defaulttheme/checkbox_radio_disabled_on'.
+    '''
+
+    def on_state(self, instance, value):
+        if value == 'down':
+            self.active = True
+        else:
+            self.active = False
 
     def _toggle_active(self):
-        self._release_group(self)
-        self.active = not self.active
+        self._do_press()
 
-    def _release(self):
-        self.active = not self.active
-
-    def on_touch_down(self, touch):
-        if not self.collide_point(*touch.pos):
-            return
-        if self.disabled:
-            return True
-        if self.group is None or self.group == '':
-            self._release()
-        elif self.group:
-            if not self.active:
-                self._toggle_active()
-        return True
-
-    @staticmethod
-    def _clear_groups(wk):
-        # auto flush the element when the weak reference have been deleted
-        groups = CheckBox.__groups
-        for group in list(groups.values()):
-            if wk in group:
-                group.remove(wk)
-                break
+    def on_active(self, instance, value):
+        self.state = 'down' if value else 'normal'

@@ -1,3 +1,17 @@
+'''
+3D Rotating Monkey Head
+========================
+
+This example demonstrates using OpenGL to display a rotating monkey head. This
+includes loading a Blender OBJ file, shaders written in OpenGL's Shading
+Language (GLSL), and using scheduled callbacks.
+
+The monkey.obj file is an OBJ file output from the Blender free 3D creation
+software. The file is text, listing vertices and faces and is loaded
+using a class in the file objloader.py. The file simple.glsl is
+a simple vertex and fragment shader written in GLSL.
+'''
+
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
@@ -42,7 +56,7 @@ class Renderer(Widget):
         PushMatrix()
         Translate(0, 0, -3)
         self.rot = Rotate(1, 0, 1, 0)
-        m = self.scene.objects.values()[0]
+        m = list(self.scene.objects.values())[0]
         UpdateNormalMatrix()
         self.mesh = Mesh(
             vertices=m.vertices,

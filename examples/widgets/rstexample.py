@@ -8,7 +8,7 @@ And if i really want to write my code: &amp;bl; Hello world &amp;br;
 And video widget
 ----------------
 
-.. video:: softboy.avi
+.. video:: softboy.mpg
 
 
 Inline Markup
@@ -117,6 +117,7 @@ Go to top_'''
 
 from kivy.uix.rst import RstDocument
 from kivy.app import App
+
 
 class RstApp(App):
     def build(self):

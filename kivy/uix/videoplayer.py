@@ -55,6 +55,26 @@ You can allow stretching by passing custom options to a
     player = VideoPlayer(source='myvideo.avi', state='play',
         options={'allow_stretch': True})
 
+End-of-stream behavior
+----------------------
+
+You can specify what happens when the video has finished playing by passing an
+`eos` (end of stream) directive to the underlying
+:class:`~kivy.core.video.VideoBase` class. `eos` can be one of 'stop', 'pause'
+or 'loop' and defaults to 'stop'. For example, in order to loop the video::
+
+    player = VideoPlayer(source='myvideo.avi', state='play',
+        options={'eos': 'loop'})
+
+.. note::
+
+    The `eos` property of the VideoBase class is a string specifying the
+    end-of-stream behavior. This property differs from the `eos`
+    properties of the :class:`VideoPlayer` and
+    :class:`~kivy.uix.video.Video` classes, whose `eos`
+    property is simply a boolean indicating that the end of the file has
+    been reached.
+
 '''
 
 __all__ = ('VideoPlayer', 'VideoPlayerAnnotation')
@@ -480,6 +500,14 @@ class VideoPlayer(GridLayout):
         if self._video is not None:
             self._video.unload()
             self._video = None
+        if value:
+            self._trigger_video_load()
+
+    def on_image_overlay_play(self, instance, value):
+        self._image.image_overlay_play = value
+
+    def on_image_loading(self, instance, value):
+        self._image.image_loading = value
 
     def _load_thumbnail(self):
         if not self.container:
@@ -513,6 +541,9 @@ class VideoPlayer(GridLayout):
         if self._video is not None:
             self._video.state = value
 
+    def _set_state(self, instance, value):
+        self.state = value
+
     def _do_video_load(self, *largs):
         self._video = Video(source=self.source, state=self.state,
                             volume=self.volume, pos_hint={'x': 0, 'y': 0},
@@ -520,7 +551,8 @@ class VideoPlayer(GridLayout):
         self._video.bind(texture=self._play_started,
                          duration=self.setter('duration'),
                          position=self.setter('position'),
-                         volume=self.setter('volume'))
+                         volume=self.setter('volume'),
+                         state=self._set_state)
 
     def on_play(self, instance, value):
         value = 'play' if value else 'stop'
@@ -623,4 +655,7 @@ class VideoPlayer(GridLayout):
 if __name__ == '__main__':
     import sys
     from kivy.base import runTouchApp
-    runTouchApp(VideoPlayer(source=sys.argv[1]))
+    player = VideoPlayer(source=sys.argv[1])
+    runTouchApp(player)
+    if player:
+        player.state = 'stop'

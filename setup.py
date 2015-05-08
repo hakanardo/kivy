@@ -2,6 +2,7 @@
 # Kivy - Crossplatform NUI toolkit
 # http://kivy.org/
 #
+from __future__ import print_function
 
 import sys
 
@@ -11,24 +12,54 @@ from os.path import join, dirname, sep, exists, basename
 from os import walk, environ
 from distutils.core import setup
 from distutils.extension import Extension
+from distutils.version import LooseVersion
 from collections import OrderedDict
+from time import sleep
+
 
 if sys.version > '3':
     PY3 = True
 else:
     PY3 = False
 
+if PY3:  # fix error with py3's LooseVersion comparisons
+    def ver_equal(self, other):
+        return self.version == other
+
+    LooseVersion.__eq__ = ver_equal
+
+
+MIN_CYTHON_STRING = '0.20'
+MIN_CYTHON_VERSION = LooseVersion(MIN_CYTHON_STRING)
+MAX_CYTHON_STRING = '0.21.2'
+MAX_CYTHON_VERSION = LooseVersion(MAX_CYTHON_STRING)
+CYTHON_UNSUPPORTED = (
+    LooseVersion('0.22'),
+    LooseVersion('0.22.beta0'),
+    LooseVersion('0.22.alpha0'),
+)
+
 
 def getoutput(cmd):
     import subprocess
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    return p.communicate()[0]
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    p.wait()
+    if p.returncode:  # if not returncode == 0
+        print('WARNING: A problem occured while running {0} (code {1})\n'
+              .format(cmd, p.returncode))
+        stderr_content = p.stderr.read()
+        if stderr_content:
+            print('{0}\n'.format(stderr_content))
+        return ""
+    return p.stdout.read()
 
 
 def pkgconfig(*packages, **kw):
     flag_map = {'-I': 'include_dirs', '-L': 'library_dirs', '-l': 'libraries'}
     cmd = 'pkg-config --libs --cflags {}'.format(' '.join(packages))
-    for token in getoutput(cmd).split():
+    results = getoutput(cmd).split()
+    for token in results:
         ext = token[:2].decode('utf-8')
         flag = flag_map.get(ext)
         if not flag:
@@ -64,15 +95,16 @@ if exists('/opt/vc/include/bcm_host.h'):
 #
 c_options = OrderedDict()
 c_options['use_rpi'] = platform == 'rpi'
-c_options['use_opengl_es2'] = True
+c_options['use_opengl_es2'] = None
 c_options['use_opengl_debug'] = False
 c_options['use_glew'] = False
-c_options['use_sdl'] = False
+c_options['use_sdl2'] = None
 c_options['use_ios'] = False
 c_options['use_mesagl'] = False
 c_options['use_x11'] = False
-c_options['use_gstreamer'] = False
+c_options['use_gstreamer'] = None
 c_options['use_avfoundation'] = platform == 'darwin'
+c_options['use_osx_frameworks'] = platform == 'darwin'
 
 # now check if environ is changing the default values
 for key in list(c_options.keys()):
@@ -85,6 +117,53 @@ for key in list(c_options.keys()):
 # -----------------------------------------------------------------------------
 # Cython check
 # on python-for-android and kivy-ios, cython usage is external
+
+cython_unsupported_append = '''
+
+  Please note that the following versions of Cython are not supported
+  at all: {}
+'''.format(', '.join(map(str, CYTHON_UNSUPPORTED)))
+
+cython_min = '''\
+  This version of Cython is not compatible with Kivy. Please upgrade to
+  at least version {0}, preferably the newest supported version {1}.
+
+  If your platform provides a Cython package, make sure you have upgraded
+  to the newest version. If the newest version available is still too low,
+  please remove it and install the newest supported Cython via pip:
+
+    pip install -I Cython=={1}{2}\
+'''.format(MIN_CYTHON_STRING, MAX_CYTHON_STRING,
+           cython_unsupported_append if CYTHON_UNSUPPORTED else '')
+
+cython_max = '''\
+  This version of Cython is untested with Kivy. While this version may
+  work perfectly fine, it is possible that you may experience issues. If
+  you do have issues, please downgrade to a supported version. It is
+  best to use the newest supported version, {1}, but the minimum
+  supported version is {0}.
+
+  If your platform provides a Cython package, check if you can downgrade
+  to a supported version. Otherwise, uninstall the platform package and
+  install Cython via pip:
+
+    pip install -I Cython=={1}{2}\
+'''.format(MIN_CYTHON_STRING, MAX_CYTHON_STRING,
+           cython_unsupported_append if CYTHON_UNSUPPORTED else '')
+
+cython_unsupported = '''\
+  This version of Cython suffers from known bugs and is unsupported.
+  Please install the newest supported version, {1}, if possible, but
+  the minimum supported version is {0}.
+
+  If your platform provides a Cython package, check if you can install
+  a supported version. Otherwise, uninstall the platform package and
+  install Cython via pip:
+
+    pip install -I Cython=={1}{2}\
+'''.format(MIN_CYTHON_STRING, MAX_CYTHON_STRING,
+           cython_unsupported_append)
+
 have_cython = False
 if platform in ('ios', 'android'):
     print('\nCython check avoided.')
@@ -93,6 +172,19 @@ else:
         # check for cython
         from Cython.Distutils import build_ext
         have_cython = True
+        import Cython
+        cy_version_str = Cython.__version__
+        cy_ver = LooseVersion(cy_version_str)
+        print('\nDetected Cython version {}'.format(cy_version_str))
+        if cy_ver < MIN_CYTHON_VERSION:
+            print(cython_min)
+            raise ImportError('Incompatible Cython Version')
+        if cy_ver in CYTHON_UNSUPPORTED:
+            print(cython_unsupported)
+            raise ImportError('Incompatible Cython Version')
+        if cy_ver > MAX_CYTHON_VERSION:
+            print(cython_max)
+            sleep(1)
     except ImportError:
         print('\nCython is missing, its required for compiling kivy !\n\n')
         raise
@@ -103,29 +195,63 @@ if not have_cython:
 # -----------------------------------------------------------------------------
 # Setup classes
 
+# the build path where kivy is being compiled
+src_path = build_path = dirname(__file__)
+
 
 class KivyBuildExt(build_ext):
 
+    def finalize_options(self):
+        retval = build_ext.finalize_options(self)
+        global build_path
+        if (self.build_lib is not None and exists(self.build_lib) and
+            not self.inplace):
+            build_path = self.build_lib
+        return retval
+
     def build_extensions(self):
-        print('Build configuration is:')
-        for opt, value in c_options.items():
-            print(' * {0} = {1}'.format(opt, value))
-        print('Generate config.h')
-        config_h_fn = expand('graphics', 'config.h')
+        # build files
+        config_h_fn = ('graphics', 'config.h')
+        config_pxi_fn = ('graphics', 'config.pxi')
+        config_py_fn = ('setupconfig.py', )
+
+        # generate headers
         config_h = '// Autogenerated file for Kivy C configuration\n'
         config_h += '#define __PY3 {0}\n'.format(int(PY3))
-        for k, v in c_options.items():
-            config_h += '#define __{0} {1}\n'.format(k.upper(), int(v))
-        self.update_if_changed(config_h_fn, config_h)
-
-        print('Generate config.pxi')
-        config_pxi_fn = expand('graphics', 'config.pxi')
-        # update the pxi only if the content changed
         config_pxi = '# Autogenerated file for Kivy Cython configuration\n'
         config_pxi += 'DEF PY3 = {0}\n'.format(int(PY3))
-        for k, v in c_options.items():
-            config_pxi += 'DEF {0} = {1}\n'.format(k.upper(), int(v))
-        self.update_if_changed(config_pxi_fn, config_pxi)
+        config_py = '# Autogenerated file for Kivy configuration\n'
+        config_py += 'PY3 = {0}\n'.format(int(PY3))
+        config_py += 'CYTHON_MIN = {0}\nCYTHON_MAX = {1}\n'.format(
+            repr(MIN_CYTHON_STRING), repr(MAX_CYTHON_STRING))
+        config_py += 'CYTHON_BAD = {0}\n'.format(repr(', '.join(map(
+            str, CYTHON_UNSUPPORTED))))
+
+        # generate content
+        print('Build configuration is:')
+        for opt, value in c_options.items():
+            value = int(bool(value))
+            print(' * {0} = {1}'.format(opt, value))
+            opt = opt.upper()
+            config_h += '#define __{0} {1}\n'.format(opt, value)
+            config_pxi += 'DEF {0} = {1}\n'.format(opt, value)
+            config_py += '{0} = {1}\n'.format(opt, value)
+        debug = bool(self.debug)
+        print(' * debug = {0}'.format(debug))
+        config_h += \
+            '#if __USE_GLEW && defined(_WIN32)\n#   define GLEW_BUILD\n#endif'
+
+        config_pxi += 'DEF DEBUG = {0}\n'.format(debug)
+        config_py += 'DEBUG = {0}\n'.format(debug)
+        for fn, content in (
+            (config_h_fn, config_h), (config_pxi_fn, config_pxi),
+            (config_py_fn, config_py)):
+            build_fn = expand(build_path, *fn)
+            if self.update_if_changed(build_fn, content):
+                print('Updated {}'.format(build_fn))
+            src_fn = expand(src_path, *fn)
+            if src_fn != build_fn and self.update_if_changed(src_fn, content):
+                print('Updated {}'.format(src_fn))
 
         c = self.compiler.compiler_type
         print('Detected compiler is {}'.format(c))
@@ -143,6 +269,7 @@ class KivyBuildExt(build_ext):
         if need_update:
             with open(fn, 'w') as fd:
                 fd.write(content)
+        return need_update
 
 
 # -----------------------------------------------------------------------------
@@ -152,7 +279,7 @@ import kivy
 
 # extra build commands go in the cmdclass dict {'command-name': CommandClass}
 # see tools.packaging.{platform}.build.py for custom build commands for
-# portable packages.  also e.g. we use build_ext command from cython if its
+# portable packages. Also e.g. we use build_ext command from cython if its
 # installed for c extensions.
 from kivy.tools.packaging.factory import FactoryBuild
 cmdclass = {
@@ -172,38 +299,108 @@ except ImportError:
 
 # Detect which opengl version headers to use
 if platform in ('android', 'darwin', 'ios', 'rpi'):
-    pass
+    c_options['use_opengl_es2'] = True
 elif platform == 'win32':
     print('Windows platform detected, force GLEW usage.')
     c_options['use_glew'] = True
+    c_options['use_opengl_es2'] = False
 else:
-    # searching GLES headers
-    default_header_dirs = ['/usr/include', '/usr/local/include']
-    found = False
-    for hdir in default_header_dirs:
-        filename = join(hdir, 'GLES2', 'gl2.h')
-        if exists(filename):
-            found = True
-            print('Found GLES 2.0 headers at {0}'.format(filename))
-            break
-    if not found:
-        print('WARNING: GLES 2.0 headers are not found')
-        print('Fallback to Desktop opengl headers.')
-        c_options['use_opengl_es2'] = False
+    if c_options['use_opengl_es2'] is None:
+        GLES = environ.get('GRAPHICS') == 'GLES'
+        OPENGL = environ.get('GRAPHICS') == 'OPENGL'
+        if GLES:
+            c_options['use_opengl_es2'] = True
+        elif OPENGL:
+            c_options['use_opengl_es2'] = False
+        else:
+            # auto detection of GLES headers
+            default_header_dirs = ['/usr/include', '/usr/local/include']
+            c_options['use_opengl_es2'] = False
+            for hdir in default_header_dirs:
+                filename = join(hdir, 'GLES2', 'gl2.h')
+                if exists(filename):
+                    c_options['use_opengl_es2'] = True
+                    print('NOTE: Found GLES 2.0 headers at {0}'.format(
+                        filename))
+                    break
+            if not c_options['use_opengl_es2']:
+                print('NOTE: Not found GLES 2.0 headers at: {}'.format(
+                    default_header_dirs))
+                print('      Please contact us if your distribution '
+                    'uses an alternative path for the headers.')
+
+print('Using this graphics system: {}'.format(
+    ['OpenGL', 'OpenGL ES 2'][int(c_options['use_opengl_es2'] or False)]))
 
 # check if we are in a kivy-ios build
 if platform == 'ios':
     print('Kivy-IOS project environment detect, use it.')
     print('Kivy-IOS project located at {0}'.format(kivy_ios_root))
-    print('Activate SDL compilation.')
     c_options['use_ios'] = True
-    c_options['use_sdl'] = True
+    c_options['use_sdl2'] = True
 
 # detect gstreamer, only on desktop
-if platform not in ('ios', 'android'):
-    gst_flags = pkgconfig('gstreamer-1.0')
-    if 'libraries' in gst_flags:
-        c_options['use_gstreamer'] = True
+# works if we forced the options or in autodetection
+if platform not in ('ios', 'android') and (c_options['use_gstreamer']
+                                           in (None, True)):
+    if c_options['use_osx_frameworks'] and platform == 'darwin':
+        # check the existence of frameworks
+        f_path = '/Library/Frameworks/GStreamer.framework'
+        if not exists(f_path):
+            c_options['use_gstreamer'] = False
+            print('Missing GStreamer framework {}'.format(f_path))
+        else:
+            c_options['use_gstreamer'] = True
+            gst_flags = {
+                'extra_link_args': [
+                    '-Xlinker', '-headerpad',
+                    '-Xlinker', '190',
+                    '-framework', 'GStreamer'],
+                'include_dirs': [join(f_path, 'Headers')]}
+
+    else:
+        # use pkg-config approach instead
+        gst_flags = pkgconfig('gstreamer-1.0')
+        if 'libraries' in gst_flags:
+            c_options['use_gstreamer'] = True
+
+
+# detect SDL2, only on desktop and iOS
+# works if we forced the options or in autodetection
+sdl2_flags = {}
+if platform not in ('android',) and c_options['use_sdl2'] in (None, True):
+
+    if c_options['use_osx_frameworks'] and platform == 'darwin':
+        # check the existence of frameworks
+        sdl2_valid = True
+        sdl2_flags = {
+            'extra_link_args': [
+                '-Xlinker', '-headerpad',
+                '-Xlinker', '190'],
+            'include_dirs': []
+        }
+        for name in ('SDL2', 'SDL2_ttf', 'SDL2_image', 'SDL2_mixer'):
+            f_path = '/Library/Frameworks/{}.framework'.format(name)
+            if not exists(f_path):
+                print('Missing framework {}'.format(f_path))
+                sdl2_valid = False
+                continue
+            sdl2_flags['extra_link_args'] += ['-framework', name]
+            sdl2_flags['include_dirs'] += [join(f_path, 'Headers')]
+            print('Found sdl2 frameworks: {}'.format(f_path))
+
+        if not sdl2_valid:
+            c_options['use_sdl2'] = False
+            print('Deactivate SDL2 compilation due to missing frameworks')
+        else:
+            c_options['use_sdl2'] = True
+            print('Activate SDL2 compilation')
+
+    elif platform != "ios":
+        # use pkg-config approach instead
+        sdl2_flags = pkgconfig('sdl2', 'SDL2_ttf', 'SDL2_image', 'SDL2_mixer')
+        if 'libraries' in sdl2_flags:
+            c_options['use_sdl2'] = True
 
 
 # -----------------------------------------------------------------------------
@@ -221,8 +418,8 @@ def get_modulename_from_file(filename):
     return '.'.join(pyxl)
 
 
-def expand(*args):
-    return join(dirname(__file__), 'kivy', *args)
+def expand(root, *args):
+    return join(root, 'kivy', *args)
 
 
 class CythonExtension(Extension):
@@ -274,7 +471,7 @@ def determine_base_flags():
             sdk_mac_ver = '.'.join(_platform.mac_ver()[0].split('.')[:2])
             print('Xcode detected at {}, and using MacOSX{} sdk'.format(
                     xcode_dev, sdk_mac_ver))
-            sysroot = join(xcode_dev,
+            sysroot = join(xcode_dev.decode('utf-8'),
                     'Platforms/MacOSX.platform/Developer/SDKs',
                     'MacOSX{}.sdk'.format(sdk_mac_ver),
                     'System/Library/Frameworks')
@@ -312,8 +509,8 @@ def determine_gl_flags():
         flags['include_dirs'] = ['/opt/vc/include',
             '/opt/vc/include/interface/vcos/pthreads',
             '/opt/vc/include/interface/vmcs_host/linux']
-        flags['extra_link_args'] = ['-L', '/opt/vc/lib']
-        flags['libraries'] = ['GLESv2']
+        flags['library_dirs'] = ['/opt/vc/lib']
+        flags['libraries'] = ['bcm_host', 'EGL', 'GLESv2']
     else:
         flags['libraries'] = ['GL']
     if c_options['use_glew']:
@@ -324,49 +521,52 @@ def determine_gl_flags():
     return flags
 
 
-def determine_sdl():
+def determine_sdl2():
     flags = {}
-    if not c_options['use_sdl']:
+    if not c_options['use_sdl2']:
         return flags
 
-    flags['libraries'] = ['SDL', 'SDL_ttf', 'freetype', 'z', 'bz2']
-    flags['include_dirs'] = []
+    sdl2_path = environ.get('KIVY_SDL2_PATH', None)
+
+    if sdl2_flags and not sdl2_path:
+        return sdl2_flags
+
+    # no pkgconfig info, or we want to use a specific sdl2 path, so perform
+    # manual configuration
+    flags['libraries'] = ['SDL2', 'SDL2_ttf', 'SDL2_image', 'SDL2_mixer']
+    split_chr = ';' if platform == 'win32' else ':'
+    sdl2_paths = sdl2_path.split(split_chr) if sdl2_path else []
+
+    flags['include_dirs'] = (
+        sdl2_paths if sdl2_paths else
+        ['/usr/local/include/SDL2', '/usr/include/SDL2'])
+
     flags['extra_link_args'] = []
     flags['extra_compile_args'] = []
+    flags['extra_link_args'] += (
+        ['-L' + p for p in sdl2_paths] if sdl2_paths else
+        ['-L/usr/local/lib/'])
 
-    # Paths as per homebrew (modified formula to use hg checkout)
-    if c_options['use_ios']:
-        # Note: on IOS, SDL is already loaded by the launcher/main.m
-        # So if we add it here, it will just complain about duplicate
-        # symbol, cause libSDL.a would be included in main.m binary +
-        # text_sdlttf.so
-        # At the result, we are linking without SDL explicitly, and add
-        # -undefined dynamic_lookup
-        # (/tito)
-        flags['libraries'] = ['SDL_ttf', 'freetype', 'bz2']
-        flags['include_dirs'] += [
-            join(kivy_ios_root, 'build', 'include'),
-            join(kivy_ios_root, 'build', 'include', 'SDL'),
-            join(kivy_ios_root, 'build', 'include', 'freetype')]
-        flags['extra_link_args'] += [
-            '-L', join(kivy_ios_root, 'build', 'lib'),
-            '-undefined', 'dynamic_lookup']
-    else:
-        flags['include_dirs'] = ['/usr/local/include/SDL']
-        flags['extra_link_args'] += ['-L/usr/local/lib/']
+    # ensure headers for all the SDL2 and sub libraries are available
+    libs_to_check = ['SDL', 'SDL_mixer', 'SDL_ttf', 'SDL_image']
+    can_compile = True
+    for lib in libs_to_check:
+        found = False
+        for d in flags['include_dirs']:
+            fn = join(d, '{}.h'.format(lib))
+            if exists(fn):
+                found = True
+                print('SDL2: found {} header at {}'.format(lib, fn))
+                break
 
-    if platform == 'ios':
-        flags['extra_link_args'] += [
-            '-framework', 'Foundation',
-            '-framework', 'UIKit',
-            '-framework', 'AudioToolbox',
-            '-framework', 'CoreGraphics',
-            '-framework', 'QuartzCore',
-            '-framework', 'MobileCoreServices',
-            '-framework', 'ImageIO']
-    elif platform == 'darwin':
-        flags['extra_link_args'] += [
-            '-framework', 'ApplicationServices']
+        if not found:
+            print('SDL2: missing sub library {}'.format(lib))
+            can_compile = False
+
+    if not can_compile:
+        c_options['use_sdl2'] = False
+        return {}
+
     return flags
 
 
@@ -411,10 +611,13 @@ graphics_dependencies = {
     'stencil_instructions.pxd': ['instructions.pxd'],
     'stencil_instructions.pyx': [
         'config.pxi', 'opcodes.pxi', 'c_opengl.pxd', 'c_opengl_debug.pxd'],
+    'svg.pyx': ['config.pxi', 'common.pxi', 'texture.pxd', 'instructions.pxd',
+                'vertex_instructions.pxd', 'tesselator.pxd'],
     'texture.pxd': ['c_opengl.pxd'],
     'texture.pyx': [
         'config.pxi', 'common.pxi', 'opengl_utils_def.pxi', 'context.pxd',
-        'c_opengl.pxd', 'c_opengl_debug.pxd', 'opengl_utils.pxd'],
+        'c_opengl.pxd', 'c_opengl_debug.pxd', 'opengl_utils.pxd',
+        'img_tools.pxi'],
     'vbo.pxd': ['buffer.pxd', 'c_opengl.pxd', 'vertex.pxd'],
     'vbo.pyx': [
         'config.pxi', 'common.pxi', 'c_opengl_debug.pxd', 'context.pxd',
@@ -423,13 +626,15 @@ graphics_dependencies = {
     'vertex.pyx': ['config.pxi', 'common.pxi'],
     'vertex_instructions.pyx': [
         'config.pxi', 'common.pxi', 'vbo.pxd', 'vertex.pxd', 'instructions.pxd',
+        'vertex_instructions.pxd',
         'c_opengl.pxd', 'c_opengl_debug.pxd', 'texture.pxd',
         'vertex_instructions_line.pxi'],
     'vertex_instructions_line.pxi': ['stencil_instructions.pxd']}
 
 sources = {
-    '_event.pyx': base_flags,
-    'properties.pyx': base_flags,
+    '_event.pyx': merge(base_flags, {'depends': ['properties.pxd']}),
+    'weakproxy.pyx': {},
+    'properties.pyx': merge(base_flags, {'depends': ['_event.pxd']}),
     'graphics/buffer.pyx': base_flags,
     'graphics/context.pyx': merge(base_flags, gl_flags),
     'graphics/c_opengl_debug.pyx': merge(base_flags, gl_flags),
@@ -446,16 +651,34 @@ sources = {
     'graphics/transformation.pyx': merge(base_flags, gl_flags),
     'graphics/vbo.pyx': merge(base_flags, gl_flags),
     'graphics/vertex.pyx': merge(base_flags, gl_flags),
-    'graphics/vertex_instructions.pyx': merge(base_flags, gl_flags)}
+    'graphics/vertex_instructions.pyx': merge(base_flags, gl_flags),
+    'core/text/text_layout.pyx': base_flags,
+    'graphics/tesselator.pyx': merge(base_flags, {
+        'include_dirs': ['kivy/lib/libtess2/Include'],
+        'c_depends': [
+            'lib/libtess2/Source/bucketalloc.c',
+            'lib/libtess2/Source/dict.c',
+            'lib/libtess2/Source/geom.c',
+            'lib/libtess2/Source/mesh.c',
+            'lib/libtess2/Source/priorityq.c',
+            'lib/libtess2/Source/sweep.c',
+            'lib/libtess2/Source/tess.c'
+        ]
+    }),
+    'graphics/svg.pyx': merge(base_flags, gl_flags)
+}
 
-if c_options['use_sdl']:
-    sdl_flags = determine_sdl()
-    sources['core/window/sdl.pyx'] = merge(
-        base_flags, gl_flags, sdl_flags)
-    sources['core/text/text_sdlttf.pyx'] = merge(
-        base_flags, gl_flags, sdl_flags)
-    sources['core/audio/audio_sdl.pyx'] = merge(
-        base_flags, sdl_flags)
+if c_options['use_sdl2']:
+    sdl2_flags = determine_sdl2()
+    if sdl2_flags:
+        sdl2_depends = {'depends': ['lib/sdl2.pxi']}
+        for source_file in ('core/window/_window_sdl2.pyx',
+                            'core/image/_img_sdl2.pyx',
+                            'core/text/_text_sdl2.pyx',
+                            'core/audio/audio_sdl2.pyx',
+                            'core/clipboard/_clipboard_sdl2.pyx'):
+            sources[source_file] = merge(
+                base_flags, gl_flags, sdl2_flags, sdl2_depends)
 
 if platform in ('darwin', 'ios'):
     # activate ImageIO provider for our core image
@@ -466,7 +689,8 @@ if platform in ('darwin', 'ios'):
             '-framework', 'AudioToolbox',
             '-framework', 'CoreGraphics',
             '-framework', 'QuartzCore',
-            '-framework', 'ImageIO']}
+            '-framework', 'ImageIO',
+            '-framework', 'Accelerate']}
     else:
         osx_flags = {'extra_link_args': [
             '-framework', 'ApplicationServices']}
@@ -480,7 +704,7 @@ if c_options['use_avfoundation']:
         osx_flags = {
             'extra_link_args': ['-framework', 'AVFoundation'],
             'extra_compile_args': ['-ObjC++'],
-            'depends': ['core/camera/camera_avfoundation.m']}
+            'depends': ['core/camera/camera_avfoundation_implem.m']}
         sources['core/camera/camera_avfoundation.pyx'] = merge(
             base_flags, osx_flags)
     else:
@@ -495,9 +719,13 @@ if c_options['use_rpi']:
 if c_options['use_x11']:
     sources['core/window/window_x11.pyx'] = merge(
         base_flags, gl_flags, {
-            'depends': [
-                'core/window/window_x11_keytab.c',
-                'core/window/window_x11_core.c'],
+            # FIXME add an option to depend on them but not compile them
+            # cause keytab is included in core, and core is included in
+            # window_x11
+            #
+            #'depends': [
+            #    'core/window/window_x11_keytab.c',
+            #    'core/window/window_x11_core.c'],
             'libraries': ['Xrender', 'X11']})
 
 if c_options['use_gstreamer']:
@@ -524,7 +752,7 @@ def resolve_dependencies(fn, depends):
     deps = []
     get_dependencies(fn, deps)
     get_dependencies(fn.replace('.pyx', '.pxd'), deps)
-    return [expand('graphics', x) for x in deps]
+    return [expand(src_path, 'graphics', x) for x in deps]
 
 
 def get_extensions_from_sources(sources):
@@ -534,21 +762,22 @@ def get_extensions_from_sources(sources):
         return ext_modules
     for pyx, flags in sources.items():
         is_graphics = pyx.startswith('graphics')
-        pyx = expand(pyx)
+        pyx = expand(src_path, pyx)
+        depends = [expand(src_path, x) for x in flags.pop('depends', [])]
+        c_depends = [expand(src_path, x) for x in flags.pop('c_depends', [])]
         if not have_cython:
             pyx = '%s.c' % pyx[:-4]
-            depends = []
-        else:
-            depends = [expand(x) for x in flags.pop('depends', [])]
         if is_graphics:
             depends = resolve_dependencies(pyx, depends)
+        f_depends = [x for x in depends if x.rsplit('.', 1)[-1] in (
+            'c', 'cpp', 'm')]
         module_name = get_modulename_from_file(pyx)
         flags_clean = {'depends': depends}
         for key, value in flags.items():
             if len(value):
                 flags_clean[key] = value
         ext_modules.append(CythonExtension(module_name,
-            [pyx], **flags_clean))
+            [pyx] + f_depends + c_depends, **flags_clean))
     return ext_modules
 
 ext_modules = get_extensions_from_sources(sources)
@@ -600,6 +829,7 @@ setup(
         'kivy.effects',
         'kivy.ext',
         'kivy.graphics',
+        'kivy.garden',
         'kivy.input',
         'kivy.input.postproc',
         'kivy.input.providers',
@@ -619,6 +849,14 @@ setup(
         'kivy.uix', ],
     package_dir={'kivy': 'kivy'},
     package_data={'kivy': [
+        '*.pxd',
+        '*.pxi',
+        'core/text/*.pxd',
+        'core/text/*.pxi',
+        'graphics/*.pxd',
+        'graphics/*.pxi',
+        'lib/vidcore_lite/*.pxd',
+        'lib/vidcore_lite/*.pxi',
         'data/*.kv',
         'data/*.json',
         'data/fonts/*.ttf',
@@ -656,8 +894,9 @@ setup(
         'Operating System :: Microsoft :: Windows',
         'Operating System :: POSIX :: BSD :: FreeBSD',
         'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
         'Topic :: Artistic Software',
         'Topic :: Games/Entertainment',
         'Topic :: Multimedia :: Graphics :: 3D Rendering',
@@ -673,4 +912,3 @@ setup(
     dependency_links=[
         'https://github.com/kivy-garden/garden/archive/master.zip'],
     install_requires=['Kivy-Garden==0.1.1'])
-

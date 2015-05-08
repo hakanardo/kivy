@@ -4,10 +4,12 @@ Context management
 
 .. versionadded:: 1.2.0
 
-This class manages a registry of all the created graphics instructions. It has
+This class manages a registry of all created graphics instructions. It has
 the ability to flush and delete them.
 
-You can read more about it at :doc:`api-kivy.graphics`
+You can read more about Kivy graphics contexts in the :doc:`api-kivy.graphics`
+module documentation. These are based on
+`OpenGL graphics contexts <http://www.opengl.org/wiki/OpenGL_Context>`_.
 '''
 
 __all__ = ('Context',)
@@ -43,9 +45,6 @@ cdef class Context:
         self.observers_before = []
         self.l_texture = []
         self.l_canvas = []
-        self.l_vbo = []
-        self.l_vertexbatch = []
-        self.l_shader = []
         self.l_fbo = []
         self.flush()
         self.trigger_gl_dealloc = Clock.create_trigger(self.gl_dealloc, 0)
@@ -58,21 +57,13 @@ cdef class Context:
         self.lr_fbo_rb = array('i')
         self.lr_fbo_fb = array('i')
         self.lr_shadersource = array('i')
+        self.lr_shader = []
 
     cdef void register_texture(self, Texture texture):
         self.l_texture.append(ref(texture, self.l_texture.remove))
 
     cdef void register_canvas(self, Canvas canvas):
         self.l_canvas.append(ref(canvas, self.l_canvas.remove))
-
-    cdef void register_vbo(self, VBO vbo):
-        self.l_vbo.append(ref(vbo, self.l_vbo.remove))
-
-    cdef void register_vertexbatch(self, VertexBatch vb):
-        self.l_vertexbatch.append(ref(vb, self.l_vertexbatch.remove))
-
-    cdef void register_shader(self, Shader shader):
-        self.l_shader.append(ref(shader, self.l_shader.remove))
 
     cdef void register_fbo(self, Fbo fbo):
         self.l_fbo.append(ref(fbo, self.l_fbo.remove))
@@ -101,13 +92,11 @@ cdef class Context:
             self.trigger_gl_dealloc()
 
     cdef void dealloc_shader(self, Shader shader):
-        if shader.program == -1:
+        if shader.program == 0:
             return
-        if shader.vertex_shader is not None:
-            glDetachShader(shader.program, shader.vertex_shader.shader)
-        if shader.fragment_shader is not None:
-            glDetachShader(shader.program, shader.fragment_shader.shader)
-        glDeleteProgram(shader.program)
+        cdef int vs_id = -1
+        cdef int fs_id = -1
+        self.lr_shader.append((shader.program, vs_id, fs_id))
 
     cdef void dealloc_shader_source(self, int shader):
         cdef array arr
@@ -152,7 +141,7 @@ cdef class Context:
 
     def remove_reload_observer(self, callback, before=False):
         '''(internal) Remove a callback from the observer list previously added by
-        :meth:`add_reload_observer`. 
+        :meth:`add_reload_observer`.
         '''
         lst = self.observers_before if before else self.observers
         for cb in lst[:]:
@@ -237,23 +226,24 @@ cdef class Context:
         image_objects.update(Cache._objects['kv.image'])
         Cache._objects['kv.image'] = image_objects
 
+        gc_objects = gc.get_objects()[:]
         Logger.debug('Context: Reload vbos')
-        for item in self.l_vbo[:]:
-            vbo = item()
-            if vbo is not None:
-                Logger.trace('Context: reloaded %r' % item())
+        for item in gc_objects:
+            if isinstance(item, VBO):
+                vbo = item
+                Logger.trace('Context: reloaded %r' % vbo)
                 vbo.reload()
         Logger.debug('Context: Reload vertex batchs')
-        for item in self.l_vertexbatch[:]:
-            batch = item()
-            if batch is not None:
-                Logger.trace('Context: reloaded %r' % item())
+        for item in gc_objects:
+            if isinstance(item, VertexBatch):
+                batch = item
+                Logger.trace('Context: reloaded %r' % batch)
                 batch.reload()
         Logger.debug('Context: Reload shaders')
-        for item in self.l_shader[:]:
-            shader = item()
-            if shader is not None:
-                Logger.trace('Context: reloaded %r' % item())
+        for item in gc_objects:
+            if isinstance(item, Shader):
+                shader = item
+                Logger.trace('Context: reloaded %r' % shader)
                 shader.reload()
         Logger.debug('Context: Reload canvas')
         for item in self.l_canvas[:]:
@@ -313,6 +303,15 @@ cdef class Context:
             for i in self.lr_shadersource:
                 glDeleteShader(i)
             del self.lr_shadersource[:]
+        if len(self.lr_shader):
+            Logger.trace('Context: releasing %d shaders' % len(self.lr_shader))
+            for program, vs_id, fs_id in self.lr_shader:
+                if vs_id != -1:
+                    glDetachShader(program, vs_id)
+                if fs_id != -1:
+                    glDetachShader(program, fs_id)
+                glDeleteProgram(program)
+            del self.lr_shader[:]
 
 
 cpdef Context get_context():

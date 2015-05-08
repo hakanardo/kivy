@@ -17,13 +17,9 @@ from kivy import kivy_data_dir
 from kivy.base import ExceptionManager
 from kivy.logger import Logger
 from kivy.base import stopTouchApp, EventLoop
-from kivy.utils import platform
+from kivy.utils import platform, deprecated
 from kivy.resources import resource_find
-
-# When we are generating documentation, Config doesn't exist
-_exit_on_escape = True
-if Config:
-    _exit_on_escape = Config.getboolean('kivy', 'exit_on_escape')
+from kivy.clock import Clock
 
 try:
     android = None
@@ -55,7 +51,7 @@ class WindowPygame(WindowBase):
         # on window / macosx, the opengl context is lost, and we need to
         # reconstruct everything. Check #168 for a state of the work.
         if platform in ('linux', 'macosx', 'win') and \
-                Config.getint('graphics', 'resizable'):
+                Config.getboolean('graphics', 'resizable'):
             self.flags |= pygame.RESIZABLE
 
         try:
@@ -81,11 +77,24 @@ class WindowPygame(WindowBase):
             raise ValueError('position token in configuration accept only '
                              '"auto" or "custom"')
 
+        if self._fake_fullscreen:
+            if not self.borderless:
+                self.fullscreen = self._fake_fullscreen = False
+            elif not self.fullscreen or self.fullscreen == 'auto':
+                self.borderless = self._fake_fullscreen = False
+
         if self.fullscreen == 'fake':
-            Logger.debug('WinPygame: Set window to fake fullscreen mode')
+            self.borderless = self._fake_fullscreen = True
+            Logger.warning("The 'fake' fullscreen option has been "
+                            "deprecated, use Window.borderless or the "
+                            "borderless Config option instead.")
+
+        if self.fullscreen == 'fake' or self.borderless:
+            Logger.debug('WinPygame: Set window to borderless mode.')
+
             self.flags |= pygame.NOFRAME
-            # if no position set, in fake mode, we always need to set the
-            # position. so replace 0, 0.
+            # If no position set in borderless mode, we always need
+            # to set the position. So use 0, 0.
             if self._pos is None:
                 self._pos = (0, 0)
             environ['SDL_VIDEO_WINDOW_POS'] = '%d,%d' % self._pos
@@ -247,35 +256,24 @@ class WindowPygame(WindowBase):
         if filename is None:
             return None
         if glReadPixels is None:
-            from kivy.core.gl import glReadPixels, GL_RGBA, GL_UNSIGNED_BYTE
+            from kivy.graphics.opengl import (glReadPixels, GL_RGBA,
+                                              GL_UNSIGNED_BYTE)
         width, height = self.system_size
         data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
-        data = str(buffer(data))
+        if PY2:
+            data = str(buffer(data))
+        else:
+            data = bytes(bytearray(data))
         surface = pygame.image.fromstring(data, (width, height), 'RGBA', True)
         pygame.image.save(surface, filename)
         Logger.debug('Window: Screenshot saved at <%s>' % filename)
         return filename
 
-    def on_keyboard(self, key, scancode=None, codepoint=None,
-                    modifier=None, **kwargs):
-
-        codepoint = codepoint or kwargs.get('unicode')
-        # Quit if user presses ESC or the typical OSX shortcuts CMD+q or CMD+w
-        # TODO If just CMD+w is pressed, only the window should be closed.
-        is_osx = platform == 'darwin'
-        if _exit_on_escape and (key == 27 or
-                                (is_osx and key in (113, 119) and
-                                 modifier == 1024)):
-            stopTouchApp()
-            self.close()  # not sure what to do here
-            return True
-        super(WindowPygame, self).on_keyboard(
-            key, scancode, codepoint=codepoint, modifier=modifier)
-
     def flip(self):
         pygame.display.flip()
         super(WindowPygame, self).flip()
 
+    @deprecated
     def toggle_fullscreen(self):
         if self.flags & pygame.FULLSCREEN:
             self.flags &= ~pygame.FULLSCREEN
@@ -290,6 +288,8 @@ class WindowPygame(WindowBase):
 
             # kill application (SIG_TERM)
             if event.type == pygame.QUIT:
+                if self.dispatch('on_request_close'):
+                    continue
                 EventLoop.quit = True
                 self.close()
 
@@ -332,6 +332,23 @@ class WindowPygame(WindowBase):
                 self._mouse_btn = btn
                 self._mouse_down = eventname == 'on_mouse_down'
                 self.dispatch(eventname, x, y, btn, self.modifiers)
+
+            # joystick action
+            elif event.type == pygame.JOYAXISMOTION:
+                self.dispatch('on_joy_axis', event.joy, event.axis, event.value)
+
+            elif event.type == pygame.JOYHATMOTION:
+                self.dispatch('on_joy_hat', event.joy, event.hat, event.value)
+
+            elif event.type == pygame.JOYBALLMOTION:
+                self.dispatch('on_joy_ball', event.joy, event.ballid,
+                            event.rel[0], event.rel[1])
+
+            elif event.type == pygame.JOYBUTTONDOWN:
+                self.dispatch('on_joy_button_down', event.joy, event.button)
+
+            elif event.type == pygame.JOYBUTTONUP:
+                self.dispatch('on_joy_button_up', event.joy, event.button)
 
             # keyboard action
             elif event.type in (pygame.KEYDOWN, pygame.KEYUP):

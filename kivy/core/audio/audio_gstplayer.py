@@ -38,7 +38,7 @@ class SoundGstplayer(Sound):
 
     @staticmethod
     def extensions():
-        return ('wav', 'ogg', 'mp3')
+        return ('wav', 'ogg', 'mp3', 'm4a')
 
     def __init__(self, **kwargs):
         self.player = None
@@ -52,17 +52,19 @@ class SoundGstplayer(Sound):
             self.player.stop()
             self.player.play()
         else:
-            self.player.stop()
+            self.stop()
 
     def load(self):
         self.unload()
         uri = self._get_uri()
         self.player = GstPlayer(uri, None, self._on_gst_eos_sync,
                                 _on_gstplayer_message)
-        self.player.set_volume(self.volume)
         self.player.load()
 
     def play(self):
+        # we need to set the volume everytime, it seems that stopping + playing
+        # the sound reset the volume.
+        self.player.set_volume(self.volume)
         self.player.play()
         super(SoundGstplayer, self).play()
 
@@ -76,12 +78,12 @@ class SoundGstplayer(Sound):
             self.player = None
 
     def seek(self, position):
-        self.player.seek(position / self.duration)
+        self.player.seek(position / self.length)
 
     def get_pos(self):
         return self.player.get_position()
 
-    def get_length(self):
+    def _get_length(self):
         return self.player.get_duration()
 
     def on_volume(self, instance, volume):

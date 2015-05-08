@@ -50,7 +50,7 @@ cdef extern from "X11/Xutil.h":
         XButtonEvent xbutton
 
 cdef extern int x11_create_window(int width, int height, int x, int y, \
-        int resizable, int fullscreen, int border, int above, char *title)
+        int resizable, int fullscreen, int border, int above, int CWOR, char *title)
 cdef extern void x11_gl_swap()
 cdef extern int x11_idle()
 cdef extern int x11_get_width()
@@ -147,6 +147,7 @@ class WindowX11(WindowBase):
         fullscreen = False
         border = True
         above = False
+        CWOR = False
         size = list(self.system_size)
         if self.fullscreen == 'fake':
             fullscreen = True
@@ -164,12 +165,21 @@ class WindowX11(WindowBase):
 
         if 'KIVY_WINDOW_NO_BORDER' in environ:
             border = False
-            
+
         if 'KIVY_WINDOW_ABOVE' in environ:
             above = True
 
+        # Sets CWOverrideRedirect in x11.
+        # This can lead to unknown effects depending on your
+        # system-configuration as the WindowManager will loos the control
+        # about this window. (In most cases the window then just gets placed
+        # above all other windows without any decoration)
+        if 'KIVY_WINDOW_X11_CWOR' in environ:
+            CWOR = True
+
         if x11_create_window(size[0], size[1], pos[0], pos[1],
-                resizable, fullscreen, border, above, <char *><bytes>self.title) < 0:
+                resizable, fullscreen, border, above, CWOR,
+                <char *><bytes>self.title) < 0:
             Logger.critical('WinX11: Unable to create the window')
             return
 
@@ -195,8 +205,8 @@ class WindowX11(WindowBase):
 
     def _mainloop(self):
         EventLoop.idle()
-        if x11_idle() == 0:
-            EventLoop.quit = True
+        if x11_idle() == 0 and not self.dispatch('on_request_close'):
+                EventLoop.quit = True
 
     def flip(self):
         x11_gl_swap()
@@ -210,9 +220,10 @@ class WindowX11(WindowBase):
         # TODO If just CMD+w is pressed, only the window should be closed.
         is_osx = platform == 'darwin'
         if key == 27 or (is_osx and key in (113, 119) and modifier == 1024):
-            stopTouchApp()
-            self.close()  # not sure what to do here
-            return True
+            if not self.dispatch('on_request_close', source='keyboard'):
+                stopTouchApp()
+                self.close()  # not sure what to do here
+                return True
         super(WindowX11, self).on_keyboard(key, scancode,
             codepoint=codepoint, modifier=modifier)
 

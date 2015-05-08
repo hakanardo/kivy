@@ -1,3 +1,16 @@
+'''
+Line (SmoothLine) Experiment
+============================
+
+This demonstrates the experimental and unfinished SmoothLine feature
+for fast line drawing. You should see a multi-segment
+path at the top of the screen, and sliders and buttons along the bottom.
+You can click to add new points to the segment, change the transparency
+and width of the line, or hit 'Animate' to see a set of sine and cosine
+animations. The Cap and Joint buttons don't work: SmoothLine has not
+implemented these features yet.
+'''
+
 from kivy.app import App
 from kivy.properties import OptionProperty, NumericProperty, ListProperty, \
         BooleanProperty
@@ -11,7 +24,7 @@ Builder.load_string('''
     canvas:
         Color:
             rgba: .4, .4, 1, root.alpha
-        Line:
+        SmoothLine:
             points: self.points
             joint: self.joint
             cap: self.cap
@@ -19,12 +32,12 @@ Builder.load_string('''
             close: self.close
         Color:
             rgba: .8, .8, .8, root.alpha_controlline
-        Line:
+        SmoothLine:
             points: self.points
             close: self.close
         Color:
             rgba: 1, .4, .4, root.alpha
-        Line:
+        SmoothLine:
             points: self.points2
             joint: self.joint
             cap: self.cap

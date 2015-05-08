@@ -54,10 +54,6 @@ the tabs. Your app is responsible for adding the content of individual tabs
 and for managing them, but it's not responsible for content switching. The
 tabbed panel handles switching of the main content object as per user action.
 
-.. note::
-    The default_tab functionality is turned off by default since 1.5.0. To
-    turn it back on, set `do_default_tab` = True.
-
 There is a default tab added when the tabbed panel is instantiated.
 Tabs that you add individually as above, are added in addition to the default
 tab. Thus, depending on your needs and design, you will want to customize the
@@ -345,7 +341,7 @@ class TabbedPanel(GridLayout):
     `bottom_left`, `bottom_mid`, `bottom_right`.
 
     :attr:`tab_pos` is an :class:`~kivy.properties.OptionProperty` and
-    defaults to 'bottom_mid'.
+    defaults to 'top_left'.
     '''
 
     tab_height = NumericProperty('40dp')
@@ -391,8 +387,8 @@ class TabbedPanel(GridLayout):
     :class:`~kivy.factory.Factory` will be used to resolve the class.
 
     .. versionchanged:: 1.8.0
-
-        Factory will resolve the class if a string is set.
+        The :class:`~kivy.factory.Factory` will resolve the class if a string is
+        set.
     '''
 
     def get_tab_list(self):

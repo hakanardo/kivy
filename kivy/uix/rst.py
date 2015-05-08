@@ -56,7 +56,7 @@ document.
 __all__ = ('RstDocument', )
 
 import os
-from os.path import dirname, join, exists
+from os.path import dirname, join, exists, abspath
 from kivy.clock import Clock
 from kivy.compat import PY2
 from kivy.properties import ObjectProperty, NumericProperty, \
@@ -78,6 +78,7 @@ from docutils.parsers.rst import roles
 from docutils import nodes, frontend, utils
 from docutils.parsers.rst import Directive, directives
 from docutils.parsers.rst.roles import set_classes
+from kivy.parser import parse_color
 
 
 #
@@ -160,7 +161,7 @@ Builder.load_string('''
 
     canvas:
         Color:
-            rgba: parse_color('204a9699')
+            rgba: parse_color(self.document.underline_color)
         Rectangle:
             pos: self.x, self.y + 5
             size: self.width, 1
@@ -185,7 +186,7 @@ Builder.load_string('''
         valign: 'top'
         size_hint: None, None
         size: self.texture_size[0] + dp(10), self.texture_size[1] + dp(10)
-        font_size: sp(self.document.base_font_size / 2.0)
+        font_size: sp(root.document.base_font_size / 2.0)
 
 <RstBlockQuote>:
     cols: 2
@@ -502,6 +503,15 @@ class RstDocument(ScrollView):
     to {}.
     '''
 
+    underline_color = StringProperty('204a9699')
+    '''underline color of the titles, expressed in html color notation
+
+    :attr:`underline_color` is a
+    :class:`~kivy.properties.StringProperty` and defaults to '204a9699'.
+
+    .. versionadded: 1.9.0
+    '''
+
     # internals.
     content = ObjectProperty(None)
     scatter = ObjectProperty(None)
@@ -516,10 +526,12 @@ class RstDocument(ScrollView):
         super(RstDocument, self).__init__(**kwargs)
 
     def on_source(self, instance, value):
+        if not value:
+            return
         if self.document_root is None:
             # set the documentation root to the directory name of the
             # first tile
-            self.document_root = dirname(value)
+            self.document_root = abspath(dirname(value))
         self._load_from_source()
 
     def on_text(self, instance, value):
@@ -544,10 +556,6 @@ class RstDocument(ScrollView):
         The result will be stored in :attr:`toctrees` with the ``filename`` as
         key.
         '''
-        if filename in self.toctrees:
-            return
-        if not exists(filename):
-            return
 
         with open(filename, 'rb') as fd:
             text = fd.read().decode(encoding, errors)
@@ -622,11 +630,10 @@ class RstDocument(ScrollView):
         .. versionadded:: 1.3.0
         '''
         # check if it's a file ?
-        if self.document_root is not None and ref.endswith('.rst'):
-            filename = join(self.document_root, ref)
-            if exists(filename):
-                self.source = filename
-                return
+        if ref.endswith('.rst'):
+            # whether it's a valid or invalid file, let source deal with it
+            self.source = ref
+            return
 
         # get the association
         ref = self.refs_assoc.get(ref, ref)

@@ -28,7 +28,7 @@ __all__ = (
     'kivy_config_fn', 'kivy_usermodules_dir',
 )
 
-__version__ = '1.8.0'
+__version__ = '1.9.0'
 
 import sys
 import shutil
@@ -179,23 +179,20 @@ def kivy_usage():
     print(kivy_usage.__doc__ % (basename(sys.argv[0])))
 
 
-# Start !
-if 'vim' in globals():
-    Logger.setLevel(level=LOG_LEVELS.get('critical'))
-else:
-    Logger.setLevel(level=LOG_LEVELS.get('info'))
-    Logger.info('Kivy v%s' % (__version__))
-
 #: Global settings options for kivy
 kivy_options = {
-    'window': ('egl_rpi', 'pygame', 'sdl', 'x11'),
-    'text': ('pil', 'pygame', 'sdlttf'),
-    'video': ('gstplayer', 'ffmpeg', 'gi', 'pygst', 'pyglet', 'null'),
-    'audio': ('gstplayer', 'pygame', 'gi', 'pygst', 'sdl'),
-    'image': ('tex', 'imageio', 'dds', 'gif', 'pil', 'pygame'),
+    'window': ('egl_rpi', 'sdl2', 'pygame', 'sdl', 'x11'),
+    'text': ('pil', 'sdl2', 'pygame', 'sdlttf'),
+    'video': (
+        'gstplayer', 'ffmpeg', 'ffpyplayer', 'gi', 'pygst', 'pyglet',
+        'null'),
+    'audio': ('gstplayer', 'pygame', 'gi', 'pygst', 'ffpyplayer', 'sdl2'),
+    'image': ('tex', 'imageio', 'dds', 'gif', 'sdl2', 'pygame', 'pil', 'ffpy'),
     'camera': ('opencv', 'gi', 'pygst', 'videocapture', 'avfoundation'),
     'spelling': ('enchant', 'osxappkit', ),
-    'clipboard': ('android', 'pygame', 'dummy'), }
+    'clipboard': (
+        'android', 'winctypes', 'xsel', 'dbusklipper', 'nspaste', 'sdl2',
+        'pygame', 'dummy', 'gtk3', )}
 
 # Read environment
 for option in kivy_options:
@@ -215,6 +212,7 @@ for option in kivy_options:
 #: Kivy directory
 kivy_base_dir = dirname(sys.modules[__name__].__file__)
 #: Kivy modules directory
+
 kivy_modules_dir = environ.get('KIVY_MODULES_DIR',
                                join(kivy_base_dir, 'modules'))
 #: Kivy extension directory
@@ -249,12 +247,15 @@ if any('pyinstaller' in arg for arg in sys.argv):
 
 if not environ.get('KIVY_DOC_INCLUDE'):
     # Configuration management
-    user_home_dir = expanduser('~')
-    if platform == 'android':
-        user_home_dir = environ['ANDROID_APP_PATH']
-    elif platform == 'ios':
-        user_home_dir = join(expanduser('~'), 'Documents')
-    kivy_home_dir = join(user_home_dir, '.kivy')
+    if 'KIVY_HOME' in environ:
+        kivy_home_dir = expanduser(environ['KIVY_HOME'])
+    else:
+        user_home_dir = expanduser('~')
+        if platform == 'android':
+            user_home_dir = environ['ANDROID_APP_PATH']
+        elif platform == 'ios':
+            user_home_dir = join(expanduser('~'), 'Documents')
+        kivy_home_dir = join(user_home_dir, '.kivy')
     kivy_config_fn = join(kivy_home_dir, 'config.ini')
     kivy_usermodules_dir = join(kivy_home_dir, 'mods')
     kivy_userexts_dir = join(kivy_home_dir, 'extensions')
@@ -279,10 +280,11 @@ if not environ.get('KIVY_DOC_INCLUDE'):
     # Set level of logger
     level = LOG_LEVELS.get(Config.get('kivy', 'log_level'))
     Logger.setLevel(level=level)
-    Logger.setLevel(level=LOG_LEVELS.get('debug'))
 
     # Can be overrided in command line
-    if 'KIVY_UNITTEST' not in environ and 'KIVY_PACKAGING' not in environ:
+    if ('KIVY_UNITTEST' not in environ and
+        'KIVY_PACKAGING' not in environ and
+        'KIVY_NO_ARGS' not in environ):
         # save sys argv, otherwize, gstreamer use it and display help..
         sys_argv = sys.argv
         sys.argv = sys.argv[:1]
@@ -387,3 +389,7 @@ if not environ.get('KIVY_DOC_INCLUDE'):
 
     if platform == 'android':
         Config.set('input', 'androidtouch', 'android')
+
+Logger.info('Kivy: v%s' % (__version__))
+Logger.info('Python: v{}'.format(sys.version))
+

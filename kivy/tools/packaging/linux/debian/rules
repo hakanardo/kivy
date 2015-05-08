@@ -10,11 +10,23 @@
 export DH_VERBOSE=1
 
 %:
-	dh $@ --with python2
+	dh $@ --with python2,python3
+
+override_dh_auto_build:
+	rm -rf $(CURDIR)/debian/tmp-build
+	for PYX in $(shell pyversions -i) $(shell py3versions -r) ; do \
+	    $(MAKE) clean; \
+	    $(MAKE) build PYTHON=$$PYX; \
+	    $(MAKE) install PYTHON=$$PYX INSTALL_ROOT=$(CURDIR)/debian/tmp-build INSTALL_PREFIX=/usr INSTALL_LAYOUT=deb; \
+	done; \
+	cd doc && PYTHONPATH=.. make PYTHON=$$PYX html
 
 override_dh_auto_install:
-	python setup.py install --root=$(CURDIR)/debian/tmp --prefix=/usr
+	mv $(CURDIR)/debian/tmp-build $(CURDIR)/debian/tmp
 
 override_dh_auto_test:
 	#xvfb-run -s "+extension GLX" dh_auto_test
 	echo "! TESTS ARE TEMPORARY DISABLED !"
+
+override_dh_install:
+	dh_install --fail-missing  --sourcedir debian/tmp

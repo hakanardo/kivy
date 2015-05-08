@@ -5,14 +5,13 @@ Stencil instructions
 .. versionadded:: 1.0.4
 
 .. versionchanged:: 1.3.0
-
     The stencil operation has been updated to resolve some issues that appeared
     when nested. You **must** now have a StencilUnUse and repeat the same
     operation as you did after StencilPush.
 
 Stencil instructions permit you to draw and use the current drawing as a mask.
-Even if you don't have as much control as pure OpenGL, you can still do fancy
-things :=)
+They don't give as much control as pure OpenGL, but you can still do fancy
+things!
 
 The stencil buffer can be controlled using these 3 instructions:
 
@@ -25,7 +24,7 @@ The stencil buffer can be controlled using these 3 instructions:
     - :class:`StencilPop` : pop the current stencil layer.
 
 
-Here is a global scheme to respect::
+You should always respect this scheme:
 
 .. code-block:: kv
 
@@ -36,13 +35,13 @@ Here is a global scheme to respect::
     StencilUse
 
     # PHASE 2: all the drawing here will be automatically clipped by the
-    mask created in PHASE 1.
+    # mask created in PHASE 1.
 
     StencilUnUse
 
     # PHASE 3: drawing instructions wil now be drawn without clipping but the
-    mask will still be on the stack. You can return to PHASE 2 at any
-    time by issuing another *StencilUse* command.
+    # mask will still be on the stack. You can return to PHASE 2 at any
+    # time by issuing another *StencilUse* command.
 
     StencilPop
 
@@ -53,7 +52,7 @@ Limitations
 -----------
 
 - Drawing in PHASE 1 and PHASE 3 must not collide or you
-  will get unexpected result.
+  will get unexpected results
 - The stencil is activated as soon as you perform a StencilPush
 - The stencil is deactivated as soon as you've correctly popped all the stencil
   layers
@@ -140,7 +139,7 @@ cdef class StencilPush(Instruction):
             glClearStencil(0)
             glClear(GL_STENCIL_BUFFER_BIT)
         if _stencil_level > 128:
-            raise Exception('Cannot push more than 8 level of stencil.'
+            raise Exception('Cannot push more than 128 level of stencil.'
                             ' (stack overflow)')
 
         glEnable(GL_STENCIL_TEST)

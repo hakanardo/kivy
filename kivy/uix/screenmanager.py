@@ -3,11 +3,6 @@
 
 .. versionadded:: 1.4.0
 
-.. warning::
-
-    This widget is still experimental, and its API is subject to change in a
-    future version.
-
 The screen manager is a widget dedicated to managing multiple screens for your
 application. The default :class:`ScreenManager` displays only one
 :class:`Screen` at a time and uses a :class:`TransitionBase` to switch from one
@@ -20,7 +15,7 @@ Basic Usage
 -----------
 
 Let's construct a Screen Manager with 4 named screens. When you are creating
-a screen, you absolutely need to give a name to it::
+a screen, **you absolutely need to give a name to it**::
 
     from kivy.uix.screenmanager import ScreenManager, Screen
 
@@ -39,17 +34,6 @@ a screen, you absolutely need to give a name to it::
     # A transition will automatically be used.
     sm.current = 'Title 2'
 
-From 1.8.0, you can now switch dynamically to a new screen, change the
-transition options and remove the previous one by using
-:meth:`ScreenManager.switch_to`::
-
-    sm = ScreenManager()
-    screens = [Screen(name='Title {}'.format(i)) for i in range(4)]
-
-    sm.switch_to(screens[0])
-    # later
-    sm.swith_to(screens[1], direction='right')
-
 The default :attr:`ScreenManager.transition` is a :class:`SlideTransition` with
 options :attr:`~SlideTransition.direction` and
 :attr:`~TransitionBase.duration`.
@@ -57,6 +41,11 @@ options :attr:`~SlideTransition.direction` and
 Please note that by default, a :class:`Screen` displays nothing: it's just a
 :class:`~kivy.uix.relativelayout.RelativeLayout`. You need to use that class as
 a root widget for your own screen, the best way being to subclass.
+
+.. warning::
+    As :class:`Screen` is a :class:`~kivy.uix.relativelayout.RelativeLayout`,
+    it is important to understand the
+    :ref:`kivy-uix-relativelayout-common-pitfalls`.
 
 Here is an example with a 'Menu Screen' and a 'Settings Screen'::
 
@@ -106,6 +95,57 @@ Here is an example with a 'Menu Screen' and a 'Settings Screen'::
         TestApp().run()
 
 
+Changing Direction
+------------------
+
+A common use case for :class:`ScreenManager` involves using a
+:class:`SlideTransition` which slides right to the next screen
+and slides left to the previous screen. Building on the previous
+example, this can be accomplished like so::
+
+    Builder.load_string("""
+    <MenuScreen>:
+        BoxLayout:
+            Button:
+                text: 'Goto settings'
+                on_press:
+                    root.manager.transition.direction = 'left'
+                    root.manager.current = 'settings'
+            Button:
+                text: 'Quit'
+
+    <SettingScreen>:
+        BoxLayout:
+            Button:
+                text: 'My settings button'
+            Button:
+                text: 'Back to menu'
+                on_press:
+                    root.manager.transition.direction = 'right'
+                    root.manager.current = 'menu'
+    """)
+
+
+Advanced Usage
+--------------
+
+From 1.8.0, you can now switch dynamically to a new screen, change the
+transition options and remove the previous one by using
+:meth:`~ScreenManager.switch_to`::
+
+    sm = ScreenManager()
+    screens = [Screen(name='Title {}'.format(i)) for i in range(4)]
+
+    sm.switch_to(screens[0])
+    # later
+    sm.switch_to(screens[1], direction='right')
+
+Note that this method adds the screen to the :class:`ScreenManager` instance
+and should not be used if your screens have already been added to this
+instance. To switch to a screen which is already added, you should use the
+:attr:`~ScreenManager.current` property.
+
+
 Changing transitions
 --------------------
 
@@ -130,7 +170,7 @@ You can easily switch transitions by changing the
 
     Currently, none of Shader based Transitions use
     anti-aliasing. This is because they use the FBO which doesn't have
-    any logic to handle supersampling.  This is a known issue and we
+    any logic to handle supersampling. This is a known issue and we
     are working on a transparent implementation that will give the
     same results as if it had been rendered on screen.
 
@@ -147,6 +187,7 @@ __all__ = ('Screen', 'ScreenManager', 'ScreenManagerException',
 from kivy.compat import iteritems
 from kivy.logger import Logger
 from kivy.event import EventDispatcher
+from kivy.clock import Clock
 from kivy.uix.floatlayout import FloatLayout
 from kivy.properties import (StringProperty, ObjectProperty, AliasProperty,
                              NumericProperty, ListProperty, OptionProperty,
@@ -156,7 +197,7 @@ from kivy.uix.relativelayout import RelativeLayout
 from kivy.lang import Builder
 from kivy.graphics import (RenderContext, Rectangle, Fbo,
                            ClearColor, ClearBuffers, BindTexture, PushMatrix,
-                           PopMatrix, Translate)
+                           PopMatrix, Translate, Callback)
 
 
 class ScreenManagerException(Exception):
@@ -312,8 +353,8 @@ class TransitionBase(EventDispatcher):
     __events__ = ('on_progress', 'on_complete')
 
     def start(self, manager):
-        '''(internal) Starts the transition. This is automatically called by
-        the :class:`ScreenManager`.
+        '''(internal) Starts the transition. This is automatically
+        called by the :class:`ScreenManager`.
         '''
         if self.is_active:
             raise ScreenManagerException('start() is called twice!')
@@ -413,10 +454,18 @@ class ShaderTransition(TransitionBase):
     :attr:`vs` is a :class:`~kivy.properties.StringProperty` and defaults to
     None.'''
 
+    clearcolor = ListProperty([0, 0, 0, 1])
+    '''Sets the color of Fbo ClearColor.
+
+    .. versionadded:: 1.9.0
+
+    :attr:`clearcolor` is a :class:`~kivy.properties.ListProperty`
+    and defaults to [0, 0, 0, 1].'''
+
     def make_screen_fbo(self, screen):
         fbo = Fbo(size=screen.size)
         with fbo:
-            ClearColor(0, 0, 0, 1)
+            ClearColor(*self.clearcolor)
             ClearBuffers()
         fbo.add(screen.canvas)
         with fbo.before:
@@ -433,10 +482,21 @@ class ShaderTransition(TransitionBase):
         self.render_ctx['t'] = 1.
         super(ShaderTransition, self).on_complete()
 
+    def _remove_out_canvas(self, *args):
+        if (self.screen_out
+                and self.screen_out.canvas in self.manager.canvas.children
+                and self.screen_out not in self.manager.children):
+            self.manager.canvas.remove(self.screen_out.canvas)
+
     def add_screen(self, screen):
         self.screen_in.pos = self.screen_out.pos
         self.screen_in.size = self.screen_out.size
         self.manager.real_remove_widget(self.screen_out)
+        self.manager.canvas.add(self.screen_out.canvas)
+
+        def remove_screen_out(instr):
+            Clock.schedule_once(self._remove_out_canvas, -1)
+            self.render_ctx.remove(instr)
 
         self.fbo_in = self.make_screen_fbo(self.screen_in)
         self.fbo_out = self.make_screen_fbo(self.screen_out)
@@ -453,6 +513,7 @@ class ShaderTransition(TransitionBase):
             w, h = self.fbo_in.texture.size
             Rectangle(size=(w, h), pos=(x, y),
                       tex_coords=self.fbo_in.texture.tex_coords)
+            Callback(remove_screen_out)
         self.render_ctx['tex_out'] = 1
         self.render_ctx['tex_in'] = 2
         self.manager.canvas.add(self.render_ctx)
@@ -461,7 +522,12 @@ class ShaderTransition(TransitionBase):
         self.manager.canvas.remove(self.fbo_in)
         self.manager.canvas.remove(self.fbo_out)
         self.manager.canvas.remove(self.render_ctx)
+        self._remove_out_canvas()
         self.manager.real_add_widget(self.screen_in)
+
+    def stop(self):
+        self._remove_out_canvas()
+        super(ShaderTransition, self).stop()
 
 
 class NoTransition(TransitionBase):
@@ -472,6 +538,11 @@ class NoTransition(TransitionBase):
     '''
 
     duration = NumericProperty(0.0)
+
+    def on_complete(self):
+        self.screen_in.pos = self.manager.pos
+        self.screen_out.pos = self.manager.pos
+        super(NoTransition, self).on_complete()
 
 
 class SlideTransition(TransitionBase):
@@ -503,11 +574,11 @@ class SlideTransition(TransitionBase):
             a.y = b.y = y
             b.x = x + width * progression
             a.x = x - width * (1 - progression)
-        elif direction == 'up':
+        elif direction == 'down':
             a.x = b.x = x
             a.y = y + height * (1 - progression)
             b.y = y - height * progression
-        elif direction == 'down':
+        elif direction == 'up':
             a.x = b.x = manager.x
             b.y = y + height * progression
             a.y = y - height * (1 - progression)
@@ -629,7 +700,7 @@ class FallOutTransition(ShaderTransition):
         vec2 dist = diff + 0.5;
         float max_dist = 1.0 - tr;
 
-        /* in and out colours */
+        /* in and out colors */
         vec4 cin = vec4(texture2D(tex_in, tex_coord0.st));
         vec4 cout = vec4(texture2D(tex_out, dist));
 
@@ -684,7 +755,7 @@ class RiseInTransition(ShaderTransition):
         vec2 dist = diff + 0.5;
         float max_dist = 1.0 - tr;
 
-        /* in and out colours */
+        /* in and out colors */
         vec4 cin = vec4(texture2D(tex_in, dist));
         vec4 cout = vec4(texture2D(tex_out, tex_coord0.st));
 
@@ -801,6 +872,11 @@ class ScreenManager(FloatLayout):
             raise ScreenManagerException(
                 'ScreenManager accepts only Screen widget.')
         if screen.manager:
+            if screen.manager is self:
+                raise ScreenManagerException(
+                    'Screen already managed by this ScreenManager (are you '
+                    'calling `switch_to` when you should be setting '
+                    '`current`?)')
             raise ScreenManagerException(
                 'Screen already managed by another ScreenManager.')
         screen.manager = self
@@ -851,8 +927,9 @@ class ScreenManager(FloatLayout):
             self.transition.screen_out = previous_screen
             self.transition.start(self)
         else:
-            screen.pos = self.pos
             self.real_add_widget(screen)
+            screen.pos = self.pos
+            self.do_layout()
             screen.dispatch('on_pre_enter')
             screen.dispatch('on_enter')
 
@@ -876,7 +953,7 @@ class ScreenManager(FloatLayout):
         return bool([s for s in self.screens if s.name == name])
 
     def __next__(self):
-        '''Return the name of the next screen from the screen list.
+        '''Py2K backwards compatability without six or other lib.
         '''
         screens = self.screens
         if not screens:
@@ -889,7 +966,7 @@ class ScreenManager(FloatLayout):
             return
 
     def next(self):
-        ''' Py2K backwards compatability without six or other lib'''
+        '''Return the name of the next screen from the screen list.'''
         return self.__next__()
 
     def previous(self):
@@ -923,7 +1000,7 @@ class ScreenManager(FloatLayout):
 
         If any animation is in progress, it will be stopped and replaced by
         this one: you should avoid this because the animation will just look
-        weird. Use either :meth:`switch` or :attr:`current` but not both.
+        weird. Use either :meth:`switch_to` or :attr:`current` but not both.
 
         The `screen` name will be changed if there is any conflict with the
         current screen.

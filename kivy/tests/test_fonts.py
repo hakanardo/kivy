@@ -6,7 +6,7 @@ class FontTestCase(unittest.TestCase):
 
     def setUp(self):
         import os
-        self.font_name = os.path.join(os.path.dirname(__file__), 'कीवी.ttf')
+        self.font_name = os.path.join(os.path.dirname(__file__), u'कीवी.ttf')
         if not os.path.exists(self.font_name):
             from zipfile import ZipFile
             with ZipFile(os.path.join(os.path.dirname(__file__),
@@ -19,3 +19,12 @@ class FontTestCase(unittest.TestCase):
         lbl = Label(font_name=self.font_name)
         lbl.refresh()
         self.assertNotEqual(lbl.get_extents(''), None)
+
+    def tearDown(self):
+        import os
+        if os.path.exists(self.font_name):
+            try:
+                os.unlink(self.font_name)
+            except:
+                pass
+

@@ -10,8 +10,7 @@ from kivy.uix.popup import Popup
 import os
 
 
-Builder.load_string(
-'''
+Builder.load_string('''
 #: import utils kivy
 #: import os os
 #: import font pygame.font
@@ -29,7 +28,9 @@ Builder.load_string(
         Spinner:
             id: fnt_spnr
             text: 'DroidSansMono'
-            fnt_name: font.match_font(self.text) if font.match_font(self.text) else ''
+            fnt_name:
+                (font.match_font(self.text) if font.match_font(self.text)
+                else '')
             font_name: self.fnt_name if self.fnt_name else self.font_name
             values: sorted(font.get_fonts())
             option_cls: Factory.FntSpinnerOption
@@ -76,9 +77,12 @@ Builder.load_string(
                 text_size: self.size
                 on_release:
                     _platform = root.platform
-                    filechooser.path = os.path.expanduser('~/.fonts')\
-if _platform == 'linux' else '/system/fonts' if _platform == 'android' else os.path.expanduser('~/Library/Fonts')\
-if _platform == 'macosx' else os.environ['WINDIR'] + '\Fonts\'
+                    filechooser.path = (os.path.expanduser('~/.fonts')
+                    if _platform == 'linux' else '/system/fonts'
+                    if _platform == 'android'
+                    else os.path.expanduser('~/Library/Fonts')
+                    if _platform == 'macosx'
+                    else os.environ['WINDIR'] +'\Fonts\')
             Button:
                 size_hint: 1, .2
                 text: 'System Font directory'
@@ -87,10 +91,11 @@ if _platform == 'macosx' else os.environ['WINDIR'] + '\Fonts\'
                 text_size: self.size
                 on_release:
                     _platform = root.platform
-                    filechooser.path = '/usr/share/fonts' \
-if _platform == 'linux' else '/system/fonts' if _platform == 'android' else os.path.expanduser\
-('/System/Library/Fonts') if _platform == 'macosx' else os.environ['WINDIR']\
-+ "\Fonts\"
+                    filechooser.path = ('/usr/share/fonts'
+                    if _platform == 'linux' else '/system/fonts'
+                    if _platform == 'android' else os.path.expanduser
+                    ('/System/Library/Fonts') if _platform == 'macosx'
+                    else os.environ['WINDIR'] + "\Fonts\")
             Label:
                 text: 'BookMarks'
         BoxLayout:
@@ -110,8 +115,10 @@ if _platform == 'linux' else '/system/fonts' if _platform == 'android' else os.p
 (filechooser.path, filechooser.selection)
 ''')
 
+
 class FntSpinnerOption(SpinnerOption):
     pass
+
 
 class LoadDialog(FloatLayout):
     load = ObjectProperty(None)
@@ -121,12 +128,12 @@ class LoadDialog(FloatLayout):
 class Unicode_TextInput(BoxLayout):
 
     txt_input = ObjectProperty(None)
-    unicode_string = StringProperty('''Latin-1 suppliment: éé çç ßß
+    unicode_string = StringProperty('''Latin-1 supplement: éé çç ßß
 
 List of major languages taken from Google Translate
 ____________________________________________________
-Try changing the font to see if the font can render the glyphs you need in your application.
-Scroll to see all languages in list
+Try changing the font to see if the font can render the glyphs you need in your
+application. Scroll to see all languages in the list.
 
 Basic Latin:    The quick brown fox jumps over the lazy old dog.
 Albanian:       Kafe të shpejtë dhelpra hedhje mbi qen lazy vjetër.
@@ -198,14 +205,13 @@ Yiddish:        דער גיך ברוין פוקס דזשאַמפּס איבער 
 
     def load(self, _path, _fname):
         self.txt_input.font_name = _fname[0]
-        _f_name =  _fname[0][_fname[0].rfind(os.sep) + 1:]
+        _f_name = _fname[0][_fname[0].rfind(os.sep) + 1:]
         self.spnr_fnt.text = _f_name[:_f_name.rfind('.')]
-
         self._popup.dismiss()
 
     def show_load(self):
         content = LoadDialog(load=self.load, cancel=self.dismiss_popup)
-        self._popup = Popup(title="load file", content=content, \
+        self._popup = Popup(title="load file", content=content,
             size_hint=(0.9, 0.9))
         self._popup.open()
 

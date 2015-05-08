@@ -157,12 +157,28 @@ class ActionPrevious(ActionButton):
        'data/logo/kivy-icon-32.png'.
     '''
 
+    app_icon_width = NumericProperty(0)
+    '''Width of app_icon image.
+    '''
+
+    app_icon_height = NumericProperty(0)
+    '''Height of app_icon image.
+    '''
+
     previous_image = StringProperty(
         'atlas://data/images/defaulttheme/previous_normal')
     '''Image for the 'previous' ActionButtons default graphical representation.
 
        :attr:`previous_image` is a :class:`~kivy.properties.StringProperty` and
        defaults to 'atlas://data/images/defaulttheme/previous_normal'.
+    '''
+
+    previous_image_width = NumericProperty(0)
+    '''Width of previous_image image.
+    '''
+
+    previous_image_height = NumericProperty(0)
+    '''Height of previous_image image.
     '''
 
     title = StringProperty('')
@@ -289,8 +305,12 @@ class ActionGroup(ActionItem, Spinner):
         if not ddn.container:
             return
         children = ddn.container.children
-        ddn.width = max([self.width,
-                        children[0].minimum_width])
+
+        if children:
+            ddn.width = max([self.width, children[0].minimum_width])
+        else:
+            ddn.width = self.width
+
         for item in children:
             item.size_hint_y = None
             item.height = max([self.height, sp(48)])

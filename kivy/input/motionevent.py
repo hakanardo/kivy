@@ -17,7 +17,7 @@ Motion Event and Touch
 ----------------------
 
 We differentiate between a Motion Event and Touch event. A Touch event is a
-:class:`MotionEvent` with the `pos` profile. Only theses events are dispatched
+:class:`MotionEvent` with the `pos` profile. Only these events are dispatched
 throughout the widget tree.
 
 1. The :class:`MotionEvent` 's are gathered from input providers.
@@ -40,6 +40,8 @@ MotionEvent from the :class:`~kivy.core.window.Window` to your own callback::
 
     Window.bind(on_motion=on_motion)
 
+You can also listen to changes of the mouse position by watching
+:attr:`~kivy.core.window.WindowBase.mouse_pos`.
 
 Profiles
 --------
@@ -47,7 +49,7 @@ Profiles
 A capability is the ability of a :class:`MotionEvent` to store new
 information or a way to indicate what is supported by the MotionEvent.
 For example, you can receive a MotionEvent that has an angle, a fiducial
-ID, or even a shape.  You can check the :attr:`~MotionEvent.profile`
+ID, or even a shape. You can check the :attr:`~MotionEvent.profile`
 attribute to check what is currently supported by the MotionEvent and
 how to access it.
 
@@ -273,6 +275,7 @@ class MotionEvent(MotionEventBase):
 
         #: If the touch is a :attr:`is_triple_tap`, this is the time
         #: between the first tap and the current touch.
+        #:
         #: .. versionadded:: 1.7.0
         self.triple_tap_time = 0
 
@@ -320,7 +323,7 @@ class MotionEvent(MotionEventBase):
             raise Exception('Grab works only for Touch MotionEvents.')
         if self.grab_exclusive_class is not None:
             raise Exception('Cannot grab the touch, touch is exclusive')
-        class_instance = weakref.ref(class_instance)
+        class_instance = weakref.ref(class_instance.__self__)
         if exclusive:
             self.grab_exclusive_class = class_instance
         self.grab_list.append(class_instance)
@@ -328,7 +331,7 @@ class MotionEvent(MotionEventBase):
     def ungrab(self, class_instance):
         '''Ungrab a previously grabbed touch
         '''
-        class_instance = weakref.ref(class_instance)
+        class_instance = weakref.ref(class_instance.__self__)
         if self.grab_exclusive_class == class_instance:
             self.grab_exclusive_class = None
         if class_instance in self.grab_list:
@@ -346,7 +349,8 @@ class MotionEvent(MotionEventBase):
         self.time_update = time()
         self.depack(args)
 
-    def scale_for_screen(self, w, h, p=None, rotation=0):
+    def scale_for_screen(self, w, h, p=None, rotation=0,
+                         smode='None', kheight=0):
         '''Scale position for the screen
         '''
         sx, sy = self.sx, self.sy
@@ -368,6 +372,14 @@ class MotionEvent(MotionEventBase):
 
         if p:
             self.z = self.sz * float(p)
+
+        if smode:
+            if smode == 'pan':
+                self.y -= kheight
+            elif smode == 'scale':
+                self.y += (kheight * (
+                    (self.y - kheight) / (h - kheight))) - kheight
+
         if self.ox is None:
             self.px = self.ox = self.x
             self.py = self.oy = self.y

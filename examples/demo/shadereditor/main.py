@@ -1,4 +1,21 @@
 #!/usr/bin/kivy
+'''
+Live Shader Editor
+==================
+
+This provides a live editor for vertex and fragment editors.
+You should see a window with two editable panes on the left
+and a large kivy logo on the right.The top pane is the
+Vertex shader and the bottom is the Fragment shader. The file shadereditor.kv
+describes the interface.
+
+On each keystroke to either shader, declarations are added and the shaders
+are compiled. If there are no errors, the screen is updated. Otherwise,
+the error is visible as logging message in your terminal.
+'''
+
+
+import sys
 import kivy
 kivy.require('1.0.6')
 
@@ -46,6 +63,7 @@ uniform mat4       projection_mat;
 uniform vec4       color;
 '''
 
+
 class ShaderViewer(FloatLayout):
     fs = StringProperty(None)
     vs = StringProperty(None)
@@ -70,7 +88,10 @@ class ShaderViewer(FloatLayout):
 
 Factory.register('ShaderViewer', cls=ShaderViewer)
 
+
 class ShaderEditor(FloatLayout):
+
+    source = StringProperty('data/logo/kivy-icon-512.png')
 
     fs = StringProperty('''
 void main (void){
@@ -105,9 +126,13 @@ void main (void) {
         print('-->', vs)
         self.viewer.vs = vs
 
+
 class ShaderEditorApp(App):
     def build(self):
-        return ShaderEditor()
+        kwargs = {}
+        if len(sys.argv) > 1:
+            kwargs['source'] = sys.argv[1]
+        return ShaderEditor(**kwargs)
 
 if __name__ == '__main__':
     ShaderEditorApp().run()

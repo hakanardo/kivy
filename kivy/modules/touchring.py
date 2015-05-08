@@ -15,17 +15,18 @@ Configuration
         Scale of the image.
     `alpha`: float, defaults to 1.
         Opacity of the image.
-    `show_cursor`: boolean, default to False
+    `show_cursor`: boolean, defaults to False
         .. versionadded:: 1.8.0
-    `cursor_image`: str, defaults to 'atlas://data/images/defaulttheme/slider_cursor'
-        Image used to represent the cursor if displayed
+    `cursor_image`: str, defaults to
+        'atlas://data/images/defaulttheme/slider_cursor' Image used to
+        represent the cursor if displayed
         .. versionadded:: 1.8.0
     `cursor_size`: tuple, defaults to (None, None)
         Apparent size of the mouse cursor, if displayed, default value
         will keep its real size.
         .. versionadded:: 1.8.0
     `cursor_offset`: tuple, defaults to (None, None)
-        Offset of the texture image, default value , will align the
+        Offset of the texture image. The default value will align the
         top-left corner of the image to the mouse pos.
         .. versionadded:: 1.8.0
 
