@@ -151,7 +151,6 @@ class Keyboard(EventDispatcher):
 
     def _on_window_key_down(self, instance, keycode, scancode, text,
                             modifiers):
-        
         keycode = (keycode, self.keycode_to_string(keycode))
         if text == '\x04':
             Window.trigger_keyboard_height()
